@@ -8,15 +8,11 @@ st.set_page_config(
 
 st.title("🚀 Buscador de Vídeos Virales u Outliers en YouTube")
 st.write(
-    "Encuentra vídeos que han logrado **más reproducciones que suscriptores** tiene el canal que los subió."
+    "Encuentra vídeos que han logrado **más reproducciones que suscriptores** tiene el canal."
 )
 
-st.sidebar.header("⚙️ Configuración")
-api_key_input = st.sidebar.text_input(
-    "Ingresa tu YouTube API Key:",
-    type="password",
-    help="Pega aquí la clave que obtuviste en Google Cloud",
-)
+# Obtener la API Key desde los Secrets de Streamlit (Oculta al usuario)
+api_key = st.secrets.get("YOUTUBE_API_KEY")
 
 query = st.text_input(
     "🔍 Introduce el tema o palabra clave a buscar:",
@@ -31,16 +27,16 @@ max_results = st.slider(
 )
 
 if st.button("Buscar Vídeos Virales", type="primary"):
-    if not api_key_input:
+    if not api_key:
         st.error(
-            "⚠️ Por favor, introduce tu API Key en la barra lateral izquierda."
+            "⚠️ Error de configuración: No se ha encontrado la API Key en el servidor."
         )
     elif not query:
         st.warning("⚠️ Escribe una palabra clave para buscar.")
     else:
         with st.spinner("Analizando vídeos de YouTube..."):
             try:
-                youtube = build("youtube", "v3", developerKey=api_key_input)
+                youtube = build("youtube", "v3", developerKey=api_key)
 
                 search_response = (
                     youtube.search()
@@ -107,7 +103,7 @@ if st.button("Buscar Vídeos Virales", type="primary"):
                     )
                 else:
                     st.info(
-                        "No se encontraron vídeos que superen en visitas al número de suscriptores en este grupo de resultados."
+                        "No se encontraron vídeos que superen en visitas al número de suscriptores."
                     )
 
             except Exception as e:
