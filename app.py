@@ -43,24 +43,35 @@ st.markdown(
         margin: 0 auto;
     }
 
-    /* Targetas de Outliers */
+    /* Tarjetas de Outliers con Miniaturas */
     .outlier-card {
         background: #161922;
         border: 1px solid #262B38;
         border-radius: 12px;
-        padding: 24px;
-        margin-bottom: 18px;
+        padding: 20px;
+        margin-bottom: 20px;
         transition: transform 0.2s ease, border-color 0.2s ease;
     }
     .outlier-card:hover {
         border-color: #3B82F6;
     }
+    .thumbnail-img {
+        width: 100%;
+        border-radius: 8px;
+        object-fit: cover;
+        aspect-ratio: 16/9;
+        border: 1px solid #2A3042;
+    }
     .outlier-title {
-        font-size: 1.15rem;
+        font-size: 1.1rem;
         font-weight: 700;
         color: #F8FAFC !important;
         text-decoration: none;
         line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
     .outlier-title:hover {
         color: #60A5FA !important;
@@ -68,7 +79,7 @@ st.markdown(
     .outlier-channel {
         color: #64748B;
         font-size: 0.875rem;
-        margin-top: 6px;
+        margin-top: 4px;
         font-weight: 500;
     }
     
@@ -91,23 +102,23 @@ st.markdown(
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 12px;
-        margin-top: 16px;
+        margin-top: 14px;
     }
     .metric-box {
         background: #1E2330;
         border-radius: 8px;
-        padding: 10px 14px;
+        padding: 8px 12px;
         border: 1px solid #2A3042;
     }
     .metric-label {
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         color: #64748B;
         text-transform: uppercase;
         font-weight: 600;
         letter-spacing: 0.05em;
     }
     .metric-value {
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         font-weight: 700;
         color: #F1F5F9;
         margin-top: 2px;
@@ -121,14 +132,14 @@ st.markdown(
         background-color: #222734;
         color: #E2E8F0 !important;
         border: 1px solid #333A4D;
-        padding: 10px 20px;
+        padding: 8px 16px;
         border-radius: 8px;
         text-decoration: none;
         font-weight: 600;
-        font-size: 0.875rem;
+        font-size: 0.85rem;
         transition: all 0.2s ease;
         width: 100%;
-        margin-top: 16px;
+        margin-top: 14px;
     }
     .btn-yt:hover {
         background-color: #FF0000;
@@ -199,12 +210,21 @@ def fetch_youtube_outliers(api_key, query, order, days_back, max_results):
         views = views_map.get(vid_id, 0)
         subs = subs_map.get(chan_id, 0)
 
+        # Capturar la URL de la miniatura de alta resolución (o media como alternativa)
+        thumbnails = item["snippet"].get("thumbnails", {})
+        thumb_url = (
+            thumbnails.get("high", {}).get("url")
+            or thumbnails.get("medium", {}).get("url")
+            or thumbnails.get("default", {}).get("url", "")
+        )
+
         if views > subs and subs > 0:
             ratio = round(views / subs, 1)
             outliers.append(
                 {
                     "titulo": item["snippet"]["title"],
                     "canal": item["snippet"]["channelTitle"],
+                    "thumbnail": thumb_url,
                     "visitas_num": views,
                     "suscriptores_num": subs,
                     "visitas": f"{views:,}",
@@ -217,34 +237,43 @@ def fetch_youtube_outliers(api_key, query, order, days_back, max_results):
     return outliers
 
 
-# --- RENDERIZADO DE RESULTADOS EN TARJETAS ---
+# --- RENDERIZADO DE RESULTADOS EN TARJETAS CON MINIATURA ---
 def render_outliers(outliers):
     for item in outliers:
         st.markdown(
             f"""
             <div class="outlier-card">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
-                    <div style="flex-grow: 1;">
-                        <a href="{item['url']}" target="_blank" class="outlier-title">{item['titulo']}</a>
-                        <div class="outlier-channel">📺 {item['canal']}</div>
+                <div style="display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start;">
+                    <div>
+                        <a href="{item['url']}" target="_blank">
+                            <img src="{item['thumbnail']}" class="thumbnail-img" alt="Thumbnail">
+                        </a>
                     </div>
                     <div>
-                        <span class="badge-outlier">🔥 {item['ratio']}</span>
-                    </div>
-                </div>
-                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: center;">
-                    <div class="metric-container">
-                        <div class="metric-box">
-                            <div class="metric-label">Visitas</div>
-                            <div class="metric-value">{item['visitas']}</div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
+                            <div style="flex-grow: 1;">
+                                <a href="{item['url']}" target="_blank" class="outlier-title">{item['titulo']}</a>
+                                <div class="outlier-channel">📺 {item['canal']}</div>
+                            </div>
+                            <div>
+                                <span class="badge-outlier">🔥 {item['ratio']}</span>
+                            </div>
                         </div>
-                        <div class="metric-box">
-                            <div class="metric-label">Suscriptores</div>
-                            <div class="metric-value">{item['suscriptores']}</div>
+                        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: center;">
+                            <div class="metric-container">
+                                <div class="metric-box">
+                                    <div class="metric-label">Visitas</div>
+                                    <div class="metric-value">{item['visitas']}</div>
+                                </div>
+                                <div class="metric-box">
+                                    <div class="metric-label">Suscriptores</div>
+                                    <div class="metric-value">{item['suscriptores']}</div>
+                                </div>
+                            </div>
+                            <div>
+                                <a href="{item['url']}" target="_blank" class="btn-yt">▶ Ver en YouTube</a>
+                            </div>
                         </div>
-                    </div>
-                    <div>
-                        <a href="{item['url']}" target="_blank" class="btn-yt">▶ Ver en YouTube</a>
                     </div>
                 </div>
             </div>
@@ -356,7 +385,7 @@ if "outliers_data" in st.session_state and st.session_state["outliers_data"]:
     with col_export:
         df_export = pd.DataFrame(outliers)
         df_csv = df_export[
-            ["titulo", "canal", "visitas_num", "suscriptores_num", "ratio", "url"]
+            ["titulo", "canal", "visitas_num", "suscriptores_num", "ratio", "url", "thumbnail"]
         ].rename(
             columns={
                 "titulo": "Título",
@@ -365,6 +394,7 @@ if "outliers_data" in st.session_state and st.session_state["outliers_data"]:
                 "suscriptores_num": "Suscriptores",
                 "ratio": "Multiplicador Outlier",
                 "url": "Enlace YouTube",
+                "thumbnail": "URL Miniatura",
             }
         )
         csv_bytes = df_csv.to_csv(index=False).encode("utf-8")
