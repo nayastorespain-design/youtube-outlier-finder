@@ -154,7 +154,7 @@ st.markdown(
 # Clave API desde Secrets
 YOUTUBE_API_KEY = st.secrets.get("YOUTUBE_API_KEY")
 
-# --- CONSULTA A LA API ---
+# --- CONSULTA A LA API (FILTRANDO SHORTS) ---
 @st.cache_data(ttl=43200, show_spinner=False)
 def fetch_youtube_outliers(api_key, query, order, days_back, max_results):
     youtube = build("youtube", "v3", developerKey=api_key)
@@ -163,12 +163,15 @@ def fetch_youtube_outliers(api_key, query, order, days_back, max_results):
         datetime.now(timezone.utc) - timedelta(days=days_back)
     ).isoformat()
 
+    # 1. Búsqueda excluyendo vídeos cortos (videoDuration='medium' filtra vídeos < 4 min)
+    # Valores válidos para videoDuration: 'any', 'long' (>20 min), 'medium' (4 a 20 min)
     search_res = (
         youtube.search()
         .list(
             q=query,
             part="snippet",
             type="video",
+            videoDuration="medium",  # Excluye Shorts (< 1 min) y vídeos muy cortos
             order=order,
             publishedAfter=published_after,
             maxResults=max_results,
@@ -185,9 +188,10 @@ def fetch_youtube_outliers(api_key, query, order, days_back, max_results):
 
     v_res = (
         youtube.videos()
-        .list(part="statistics", id=",".join(video_ids))
+        .list(part="statistics,contentDetails", id=",".join(video_ids))
         .execute()
     )
+    
     views_map = {
         v_item["id"]: int(v_item["statistics"].get("viewCount", 0))
         for v_item in v_res.get("items", [])
@@ -210,7 +214,6 @@ def fetch_youtube_outliers(api_key, query, order, days_back, max_results):
         views = views_map.get(vid_id, 0)
         subs = subs_map.get(chan_id, 0)
 
-        # Capturar la URL de la miniatura de alta resolución (o media como alternativa)
         thumbnails = item["snippet"].get("thumbnails", {})
         thumb_url = (
             thumbnails.get("high", {}).get("url")
@@ -218,6 +221,7 @@ def fetch_youtube_outliers(api_key, query, order, days_back, max_results):
             or thumbnails.get("default", {}).get("url", "")
         )
 
+        # Filtro de Outlier para vídeos de formato largo
         if views > subs and subs > 0:
             ratio = round(views / subs, 1)
             outliers.append(
