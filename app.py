@@ -11,34 +11,38 @@ st.set_page_config(
     page_title="Apex Outliers | YouTube Intelligence",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # --- CONFIGURACIÓN DE PAGO ---
-PAYMENT_URL = "https://tu-pagina-de-pago.com"  # Reemplazar con tu enlace de Stripe/LemonSqueezy/Hotmart/etc.
+PAYMENT_URL = "https://tu-pagina-de-pago.com"  # Reemplazar con tu enlace de pago
 
-# --- ESTILOS CSS PREMIUM (GLASSMORPHISM, MODERN SAAS & PAYWALL) ---
+# --- ESTILOS CSS PREMIUM ---
 st.markdown(
-    f"""
+    """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
-    html, body, [class*="css"] {{
+    html, body, [class*="css"] {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }}
+    }
 
-    /* Fondo principal */
-    .stApp {{
+    .stApp {
         background: radial-gradient(circle at 50% -20%, #1e1b4b 0%, #06080f 60%, #030407 100%);
         color: #f1f5f9;
-    }}
+    }
 
-    /* Header principal */
-    .app-header {{
+    /* Estilos para Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: rgba(15, 23, 42, 0.95) !important;
+        border-right: 1px solid rgba(99, 102, 241, 0.2) !important;
+    }
+
+    .app-header {
         text-align: center;
         padding: 2.5rem 1rem 1.5rem 1rem;
-    }}
-    .app-title {{
+    }
+    .app-title {
         font-size: 3rem !important;
         font-weight: 900 !important;
         letter-spacing: -0.03em;
@@ -46,16 +50,16 @@ st.markdown(
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 0.5rem;
-    }}
-    .app-subtitle {{
+    }
+    .app-subtitle {
         color: #94a3b8;
         font-size: 1.1rem;
         font-weight: 400;
         max-width: 640px;
         margin: 0 auto;
         line-height: 1.5;
-    }}
-    .app-badge {{
+    }
+    .app-badge {
         display: inline-block;
         background: rgba(99, 102, 241, 0.15);
         border: 1px solid rgba(99, 102, 241, 0.3);
@@ -67,10 +71,9 @@ st.markdown(
         letter-spacing: 0.05em;
         text-transform: uppercase;
         margin-bottom: 12px;
-    }}
+    }
 
-    /* Contenedor del Panel de Control */
-    [data-testid="stForm"], [data-testid="stVerticalBlockBorderWrapper"] > div {{
+    [data-testid="stForm"], [data-testid="stVerticalBlockBorderWrapper"] > div {
         background: rgba(15, 23, 42, 0.65) !important;
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
@@ -78,18 +81,15 @@ st.markdown(
         border-radius: 16px !important;
         padding: 24px !important;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
-    }}
+    }
 
-    /* ETIQUETAS DE TEXTO EN BLANCO PURO */
-    [data-testid="stWidgetLabel"] p, label, .stSlider label {{
+    [data-testid="stWidgetLabel"] p, label, .stSlider label {
         color: #ffffff !important;
         font-weight: 600 !important;
         font-size: 0.9rem !important;
-        letter-spacing: 0.01em !important;
-    }}
+    }
 
-    /* BOTÓN PRIMARIO ENTERPRISE */
-    .stButton > button {{
+    .stButton > button {
         background-color: #4f46e5 !important;
         color: #ffffff !important;
         font-weight: 700 !important;
@@ -101,20 +101,15 @@ st.markdown(
         box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3) !important;
         letter-spacing: 0.03em !important;
         text-transform: uppercase !important;
-    }}
-    .stButton > button:hover {{
+    }
+    .stButton > button:hover {
         background-color: #4338ca !important;
         border-color: #818cf8 !important;
         box-shadow: 0 6px 20px rgba(79, 70, 229, 0.45) !important;
         transform: translateY(-2px) !important;
-    }}
-    .stButton > button:active {{
-        transform: translateY(0) !important;
-        background-color: #3730a3 !important;
-    }}
+    }
 
-    /* Estilo para el botón de Exportar CSV */
-    .stDownloadButton > button {{
+    .stDownloadButton > button {
         background: rgba(30, 41, 59, 0.85) !important;
         color: #a5b4fc !important;
         border: 1px solid rgba(99, 102, 241, 0.4) !important;
@@ -122,19 +117,10 @@ st.markdown(
         border-radius: 8px !important;
         padding: 10px 20px !important;
         transition: all 0.3s ease !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
         width: 100% !important;
-    }}
-    .stDownloadButton > button:hover {{
-        background: rgba(99, 102, 241, 0.25) !important;
-        color: #ffffff !important;
-        border-color: #6366f1 !important;
-        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4) !important;
-        transform: translateY(-1px) !important;
-    }}
+    }
 
-    /* Tarjetas de Outliers */
-    .outlier-card {{
+    .outlier-card {
         background: rgba(15, 23, 42, 0.7);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
@@ -144,31 +130,28 @@ st.markdown(
         margin-bottom: 18px;
         transition: all 0.3s ease;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-    }}
-    .outlier-card:hover {{
+    }
+    .outlier-card:hover {
         border-color: rgba(99, 102, 241, 0.45);
         transform: translateY(-3px);
         box-shadow: 0 12px 32px rgba(99, 102, 241, 0.2);
-    }}
-    .thumbnail-container {{
+    }
+    .thumbnail-container {
         position: relative;
         overflow: hidden;
         border-radius: 10px;
         aspect-ratio: 16/9;
         background-color: #0f172a;
-    }}
-    .thumbnail-img {{
+    }
+    .thumbnail-img {
         width: 100%;
         height: 100%;
         object-fit: cover;
         display: block;
         transition: transform 0.3s ease;
-    }}
-    .outlier-card:hover .thumbnail-img {{
-        transform: scale(1.05);
-    }}
+    }
 
-    .outlier-title {{
+    .outlier-title {
         font-size: 1.15rem;
         font-weight: 700;
         color: #f8fafc !important;
@@ -178,13 +161,9 @@ st.markdown(
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
-        transition: color 0.2s ease;
-    }}
-    .outlier-title:hover {{
-        color: #a5b4fc !important;
-    }}
+    }
 
-    .outlier-meta {{
+    .outlier-meta {
         color: #94a3b8;
         font-size: 0.85rem;
         margin-top: 8px;
@@ -192,10 +171,9 @@ st.markdown(
         gap: 16px;
         align-items: center;
         font-weight: 500;
-    }}
+    }
 
-    /* Badge Outlier Ratio */
-    .badge-outlier {{
+    .badge-outlier {
         background: rgba(244, 63, 94, 0.12);
         color: #fb7185;
         border: 1px solid rgba(244, 63, 94, 0.35);
@@ -205,38 +183,34 @@ st.markdown(
         font-size: 1.05rem;
         display: inline-block;
         text-align: center;
-        box-shadow: 0 0 15px rgba(244, 63, 94, 0.15);
-    }}
+    }
 
-    /* Caja de métricas */
-    .metric-container {{
+    .metric-container {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 12px;
         margin-top: 14px;
-    }}
-    .metric-box {{
+    }
+    .metric-box {
         background: rgba(6, 8, 15, 0.6);
         border-radius: 8px;
         padding: 10px 14px;
         border: 1px solid rgba(255, 255, 255, 0.06);
-    }}
-    .metric-label {{
+    }
+    .metric-label {
         font-size: 0.68rem;
         color: #64748b;
         text-transform: uppercase;
         font-weight: 700;
-        letter-spacing: 0.06em;
-    }}
-    .metric-value {{
+    }
+    .metric-value {
         font-size: 1.1rem;
         font-weight: 800;
         color: #f1f5f9;
         margin-top: 2px;
-    }}
+    }
 
-    /* Botón YouTube */
-    .btn-yt {{
+    .btn-yt {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -248,29 +222,26 @@ st.markdown(
         text-decoration: none;
         font-weight: 600;
         font-size: 0.88rem;
-        transition: all 0.2s ease;
         width: 100%;
         text-align: center;
-    }}
-    .btn-yt:hover {{
+    }
+    .btn-yt:hover {
         background-color: #FF0000;
         color: #FFFFFF !important;
-        border-color: #FF0000;
-        box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3);
-    }}
+    }
 
-    /* --- ESTILOS PAYWALL --- */
-    .locked-container {{
+    /* Paywall */
+    .locked-container {
         position: relative;
         margin-top: 10px;
-    }}
-    .blurred-item {{
+    }
+    .blurred-item {
         filter: blur(8px);
         opacity: 0.45;
         user-select: none;
         pointer-events: none;
-    }}
-    .paywall-overlay {{
+    }
+    .paywall-overlay {
         position: absolute;
         top: 0;
         left: 0;
@@ -284,35 +255,21 @@ st.markdown(
         z-index: 20;
         padding: 40px 20px;
         border-radius: 16px;
-    }}
-    .paywall-card {{
+    }
+    .paywall-card {
         background: rgba(15, 23, 42, 0.95);
         backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
         border: 1px solid rgba(99, 102, 241, 0.4);
         border-radius: 20px;
         padding: 36px 40px;
         text-align: center;
         max-width: 520px;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(99, 102, 241, 0.2);
-    }}
-    .paywall-icon {{
-        font-size: 2.5rem;
-        margin-bottom: 12px;
-    }}
-    .paywall-title {{
-        font-size: 1.6rem;
-        font-weight: 800;
-        color: #ffffff;
-        margin-bottom: 10px;
-    }}
-    .paywall-desc {{
-        color: #94a3b8;
-        font-size: 0.95rem;
-        line-height: 1.5;
-        margin-bottom: 24px;
-    }}
-    .btn-paywall {{
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    }
+    .paywall-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .paywall-title { font-size: 1.6rem; font-weight: 800; color: #ffffff; margin-bottom: 10px; }
+    .paywall-desc { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; margin-bottom: 24px; }
+    .btn-paywall {
         display: inline-block;
         background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
         color: #ffffff !important;
@@ -321,28 +278,46 @@ st.markdown(
         padding: 14px 32px;
         border-radius: 10px;
         text-decoration: none;
-        transition: all 0.3s ease;
-        box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }}
-    .btn-paywall:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 10px 28px rgba(79, 70, 229, 0.6);
-        background: linear-gradient(135deg, #818cf8 0%, #4338ca 100%);
-    }}
+    }
 
-    /* Ocultar elementos innecesarios de Streamlit */
-    #MainMenu {{visibility: hidden;}}
-    footer {{visibility: hidden;}}
-    header {{visibility: hidden;}}
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# Clave API desde Secrets
-YOUTUBE_API_KEY = st.secrets.get("YOUTUBE_API_KEY")
+# --- GESTIÓN DE BARRA LATERAL Y API KEY ---
+st.sidebar.title("⚙️ Configuración")
+user_api_key = st.sidebar.text_input(
+    "Tu YouTube API Key (Opcional)",
+    type="password",
+    help="Si la cuota general está llena o prefieres usar tu propia clave de Google Cloud Console, introdúcela aquí.",
+)
+
+# Determinamos qué clave usar: Prioridad a la del usuario
+server_api_key = st.secrets.get("YOUTUBE_API_KEY", "")
+ACTIVE_API_KEY = (
+    user_api_key.strip() if user_api_key.strip() else server_api_key
+)
+
+if user_api_key.strip():
+    st.sidebar.success("🔑 Usando tu API Key personalizada.")
+elif server_api_key:
+    st.sidebar.info("🌐 Usando API Key del Servidor.")
+else:
+    st.sidebar.warning("⚠️ No hay API Key configurada.")
+
+st.sidebar.markdown("---")
+st.sidebar.markdown(
+    """
+### 💡 ¿Cómo obtener tu propia API Key?
+1. Ve a [Google Cloud Console](https://console.cloud.google.com/).
+2. Crea un proyecto y activa la **YouTube Data API v3**.
+3. Genera una **API Key** en Credenciales y pégala aquí arriba.
+"""
+)
 
 
 def parse_duration_to_seconds(duration_str):
@@ -492,7 +467,6 @@ def fetch_youtube_outliers(
     return outliers
 
 
-# --- RENDERIZADO INDIVIDUAL DE TARJETA ---
 def get_card_html(item, is_blurred=False):
     title = "Vídeo Bloqueado - Reservado Plan Pro" if is_blurred else item["titulo"]
     channel = "Canal Oculto" if is_blurred else item["canal"]
@@ -508,26 +482,20 @@ def get_card_html(item, is_blurred=False):
     return f"""<div class="outlier-card {blur_class}"><div style="display: grid; grid-template-columns: 240px 1fr 180px; gap: 20px; align-items: center;"><div class="thumbnail-container"><a href="{url}" target="_blank"><img src="{thumb}" class="thumbnail-img" alt="Thumbnail"></a></div><div><a href="{url}" target="_blank" class="outlier-title">{title}</a><div class="outlier-meta"><span>📺 {channel}</span><span>📅 {item['fecha']}</span></div><div class="metric-container"><div class="metric-box"><div class="metric-label">Visitas</div><div class="metric-value">{item['visitas']}</div></div><div class="metric-box"><div class="metric-label">Suscriptores</div><div class="metric-value">{item['suscriptores']}</div></div></div></div><div style="display: flex; flex-direction: column; gap: 14px; align-items: stretch; text-align: center;"><div><span class="badge-outlier">🔥 {item['ratio']}</span></div><a href="{url}" target="_blank" class="btn-yt">▶ Ver en YouTube</a></div></div></div>"""
 
 
-# --- RENDERIZADO CON PAYWALL ---
 def render_outliers_with_paywall(outliers):
     free_limit = 2
     visible_outliers = outliers[:free_limit]
     locked_outliers = outliers[free_limit:]
 
-    # 1. Renderizar los primeros 2 resultados libres
     for item in visible_outliers:
         st.markdown(get_card_html(item, is_blurred=False), unsafe_allow_html=True)
 
-    # 2. Renderizar los resultados bloqueados si existen más de 2
     if locked_outliers:
         locked_count = len(locked_outliers)
-        
-        # Generar vista previa de hasta 3 tarjetas borrosas
         preview_locked = locked_outliers[:3]
         locked_html_cards = "".join([get_card_html(item, is_blurred=True) for item in preview_locked])
 
-        # Cadena limpia en una sola línea sin sangrías iniciales para evitar errores de renderizado en Streamlit
-        paywall_wrapper = f"""<div class="locked-container">{locked_html_cards}<div class="paywall-overlay"><div class="paywall-card"><div class="paywall-icon">🔒</div><div class="paywall-title">Desbloquea todos los resultados</div><div class="paywall-desc">Estás viendo una vista previa gratuita. Suscríbete al plan Pro de Apex Intelligence para consultar la lista completa de vídeos viralizados y exportar todos los datos.</div><a href="{PAYMENT_URL}" target="_blank" class="btn-paywall">Obtener Acceso Ilimitado</a></div></div></div>"""
+        paywall_wrapper = f"""<div class="locked-container">{locked_html_cards}<div class="paywall-overlay"><div class="paywall-card"><div class="paywall-icon">🔒</div><div class="paywall-title">Desbloquea {locked_count} Outliers más</div><div class="paywall-desc">Estás viendo una vista previa gratuita. Suscríbete al plan Pro de Apex Intelligence para consultar la lista completa de vídeos viralizados y exportar todos los datos.</div><a href="{PAYMENT_URL}" target="_blank" class="btn-paywall">Obtener Acceso Ilimitado</a></div></div></div>"""
         
         st.markdown(paywall_wrapper, unsafe_allow_html=True)
 
@@ -578,7 +546,6 @@ with st.container():
             "Muestreo de búsqueda",
             options=[10, 20, 30, 50, 100, 150, 200, 300, 500],
             value=100,
-            help="Cantidad de vídeos a analizar. Valores altos consumen más cuota de la API.",
         )
     with col_min_views:
         min_views_input = st.number_input(
@@ -586,7 +553,6 @@ with st.container():
             min_value=100,
             value=1000,
             step=500,
-            help="Filtra vídeos irrelevantes de canales recién creados.",
         )
 
     btn_search = st.button(
@@ -608,9 +574,9 @@ time_mapping = {
 
 # --- EJECUCIÓN DE BÚSQUEDA ---
 if btn_search:
-    if not YOUTUBE_API_KEY:
+    if not ACTIVE_API_KEY:
         st.error(
-            "⚠️ Configura YOUTUBE_API_KEY en los Secrets de Streamlit Cloud."
+            "⚠️ No hay API Key disponible. Introduce tu propia clave en la barra lateral o configura YOUTUBE_API_KEY en Secrets."
         )
     elif not query:
         st.warning("⚠️ Introduce una palabra clave.")
@@ -619,7 +585,7 @@ if btn_search:
             try:
                 days_back = time_mapping[time_option]
                 outliers = fetch_youtube_outliers(
-                    YOUTUBE_API_KEY,
+                    ACTIVE_API_KEY,
                     query,
                     sort_mapping[sort_option],
                     days_back,
@@ -632,9 +598,7 @@ if btn_search:
                     st.session_state["search_query"] = query
                 else:
                     st.session_state.pop("outliers_data", None)
-                    st.info(
-                        "No se encontraron outliers con los filtros actuales."
-                    )
+                    st.info("No se encontraron outliers con los filtros actuales.")
 
             except Exception as e:
                 st.error(f"Error en la consulta: {e}")
@@ -651,7 +615,6 @@ if "outliers_data" in st.session_state:
             st.markdown(f"### ⚡ {len(outliers)} Outliers detectados")
 
         with col_export:
-            # Solo se permite exportar al CSV la muestra gratuita (2 primeros)
             free_outliers = outliers[:2]
             df_export = pd.DataFrame(free_outliers)
 
@@ -691,16 +654,3 @@ if "outliers_data" in st.session_state:
             )
 
         render_outliers_with_paywall(outliers)
-
-# --- FOOTER ---
-st.markdown(
-    """
-    <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.1); margin-top: 50px;">
-    <div style="text-align: center; font-size: 12px; color: #94a3b8; padding-bottom: 20px;">
-        Apex Outliers • Powered by YouTube Data API v3<br>
-        <a href="https://www.youtube.com/t/terms" target="_blank" style="color: #818cf8; text-decoration: none;">Términos de YouTube</a> | 
-        <a href="http://www.google.com/policies/privacy" target="_blank" style="color: #818cf8; text-decoration: none;">Política de Privacidad</a>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
