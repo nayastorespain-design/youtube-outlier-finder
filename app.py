@@ -11,7 +11,7 @@ st.set_page_config(
     page_title="Apex Outliers | YouTube Intelligence",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
 # --- ESTILOS CSS PREMIUM (GLASSMORPHISM & MODERN SAAS) ---
@@ -96,6 +96,26 @@ st.markdown(
     }
     .stButton > button:active {
         transform: translateY(0) !important;
+    }
+
+    /* Estilo específico para el botón de Exportar CSV (Descarga) */
+    .stDownloadButton > button {
+        background: rgba(30, 41, 59, 0.85) !important;
+        color: #a5b4fc !important;
+        border: 1px solid rgba(99, 102, 241, 0.4) !important;
+        font-weight: 700 !important;
+        border-radius: 10px !important;
+        padding: 10px 20px !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+        width: 100% !important;
+    }
+    .stDownloadButton > button:hover {
+        background: rgba(99, 102, 241, 0.25) !important;
+        color: #ffffff !important;
+        border-color: #6366f1 !important;
+        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4) !important;
+        transform: translateY(-2px) !important;
     }
 
     /* Tarjetas de Outliers */
@@ -263,7 +283,10 @@ def fetch_youtube_outliers(
             try:
                 return request.execute()
             except HttpError as e:
-                if e.resp.status in [500, 502, 503, 504] and attempt < max_retries - 1:
+                if (
+                    e.resp.status in [500, 502, 503, 504]
+                    and attempt < max_retries - 1
+                ):
                     time.sleep(1.5 * (attempt + 1))
                 else:
                     raise e
@@ -327,7 +350,9 @@ def fetch_youtube_outliers(
 
         subs_map.update(
             {
-                c_item["id"]: int(c_item["statistics"].get("subscriberCount", 0))
+                c_item["id"]: int(
+                    c_item["statistics"].get("subscriberCount", 0)
+                )
                 for c_item in c_res.get("items", [])
             }
         )
@@ -342,6 +367,7 @@ def fetch_youtube_outliers(
         duration_sec = v_info["seconds"]
         subs = subs_map.get(chan_id, 0)
 
+        # Anti-Shorts (Duración superior a 60s)
         if duration_sec <= 60:
             continue
 
@@ -542,50 +568,43 @@ if "outliers_data" in st.session_state:
 
         with col_export:
             df_export = pd.DataFrame(outliers)
-            expected_cols = [
-                "titulo",
-                "canal",
-                "fecha",
-                "visitas_num",
-                "suscriptores_num",
-                "ratio",
-                "url",
-                "thumbnail",
-            ]
-            available_cols = [
-                col for col in expected_cols if col in df_export.columns
-            ]
 
-            df_csv = df_export[available_cols].rename(
-                columns={
-                    "titulo": "Título",
-                    "canal": "Canal",
-                    "fecha": "Fecha Publicación",
-                    "visitas_num": "Visitas",
-                    "suscriptores_num": "Suscriptores",
-                    "ratio": "Multiplicador",
-                    "url": "Enlace",
-                    "thumbnail": "URL Miniatura",
-                }
-            )
+            column_mapping = {
+                "titulo": "Título",
+                "canal": "Canal",
+                "fecha": "Fecha Publicación",
+                "visitas_num": "Visitas",
+                "suscriptores_num": "Suscriptores",
+                "ratio": "Multiplicador",
+                "url": "Enlace",
+                "thumbnail": "URL Miniatura",
+            }
 
-            csv_bytes = df_csv.to_csv(index=False).encode("utf-8")
+            valid_cols = [
+                col for col in column_mapping.keys() if col in df_export.columns
+            ]
+            df_csv = df_export[valid_cols].rename(columns=column_mapping)
+
+            # Usamos utf-8-sig para compatibilidad total con acentos en Excel
+            csv_data = df_csv.to_csv(index=False).encode("utf-8-sig")
+
             clean_query = (
                 "".join(
                     c
                     for c in st.session_state.get("search_query", "outliers")
                     if c.isalnum() or c in (" ", "_")
                 )
-                .rstrip()
+                .strip()
                 .replace(" ", "_")
             )
 
             st.download_button(
                 label="📥 Exportar CSV",
-                data=csv_bytes,
+                data=csv_data,
                 file_name=f"outliers_{clean_query}.csv",
                 mime="text/csv",
                 use_container_width=True,
+                key="btn_download_csv",
             )
 
         render_outliers(outliers)
@@ -595,7 +614,7 @@ st.markdown(
     """
     <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.1); margin-top: 50px;">
     <div style="text-align: center; font-size: 12px; color: #94a3b8; padding-bottom: 20px;">
-        YouTube Outlier Finder • Powered by YouTube Data API v3<br>
+        Apex Outliers • Powered by YouTube Data API v3<br>
         <a href="https://www.youtube.com/t/terms" target="_blank" style="color: #818cf8; text-decoration: none;">Términos de YouTube</a> | 
         <a href="http://www.google.com/policies/privacy" target="_blank" style="color: #818cf8; text-decoration: none;">Política de Privacidad</a>
     </div>
