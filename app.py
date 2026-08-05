@@ -10,123 +10,192 @@ from googleapiclient.errors import HttpError
 st.set_page_config(
     page_title="Apex Outliers | YouTube Intelligence",
     page_icon="⚡",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-# Header principal en el Dashboard
-st.markdown("""
-    <h1 style='text-align: center; margin-bottom: 0;'>⚡ APEX OUTLIERS</h1>
-    <p style='text-align: center; color: #888; font-size: 1.1rem; margin-top: 4px;'>
-        Buscador de vídeos con rendimiento excepcional para YouTube
-    </p>
-    <hr style='border: 0; height: 1px; background: #333; margin-bottom: 30px;'>
-""", unsafe_allow_html=True)
-
-# --- ESTILOS CSS REFINADOS ---
+# --- ESTILOS CSS PREMIUM (GLASSMORPHISM & MODERN SAAS) ---
 st.markdown(
     """
     <style>
-    .main {
-        background-color: #0d1117;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    
+
+    /* Fondo principal */
+    .stApp {
+        background: radial-gradient(circle at 50% -20%, #1e1b4b 0%, #06080f 60%, #030407 100%);
+        color: #f1f5f9;
+    }
+
     /* Header principal */
     .app-header {
         text-align: center;
-        padding: 1.5rem 0 2rem 0;
+        padding: 2.5rem 1rem 1.5rem 1rem;
     }
     .app-title {
-        font-size: 2.4rem !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.02em;
-        background: linear-gradient(135deg, #FFFFFF 0%, #A5B4FC 100%);
+        font-size: 3rem !important;
+        font-weight: 900 !important;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 50%, #6366f1 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 0.4rem;
+        margin-bottom: 0.5rem;
     }
     .app-subtitle {
-        color: #8b949e;
-        font-size: 1rem;
+        color: #94a3b8;
+        font-size: 1.1rem;
         font-weight: 400;
-        max-width: 620px;
+        max-width: 640px;
         margin: 0 auto;
+        line-height: 1.5;
+    }
+    .app-badge {
+        display: inline-block;
+        background: rgba(99, 102, 241, 0.15);
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        color: #a5b4fc;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        margin-bottom: 12px;
     }
 
-    /* Tarjetas estilo SaaS moderno */
+    /* Contenedor del Panel de Control */
+    [data-testid="stForm"], [data-testid="stVerticalBlockBorderWrapper"] > div {
+        background: rgba(15, 23, 42, 0.65) !important;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(99, 102, 241, 0.18) !important;
+        border-radius: 16px !important;
+        padding: 24px !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    /* Botón Primario */
+    .stButton > button {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        border: none !important;
+        border-radius: 10px !important;
+        padding: 12px 24px !important;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35) !important;
+        letter-spacing: 0.02em !important;
+    }
+    .stButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 30px rgba(99, 102, 241, 0.55) !important;
+    }
+    .stButton > button:active {
+        transform: translateY(0) !important;
+    }
+
+    /* Tarjetas de Outliers */
     .outlier-card {
-        background: #161b22;
-        border: 1px solid #30363d;
-        border-radius: 12px;
-        padding: 18px;
-        margin-bottom: 16px;
-        transition: border-color 0.2s ease;
+        background: rgba(15, 23, 42, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(99, 102, 241, 0.15);
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 18px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
     }
     .outlier-card:hover {
-        border-color: #58a6ff;
+        border-color: rgba(99, 102, 241, 0.45);
+        transform: translateY(-3px);
+        box-shadow: 0 12px 32px rgba(99, 102, 241, 0.2);
+    }
+    .thumbnail-container {
+        position: relative;
+        overflow: hidden;
+        border-radius: 10px;
+        aspect-ratio: 16/9;
     }
     .thumbnail-img {
         width: 100%;
-        border-radius: 8px;
+        height: 100%;
         object-fit: cover;
-        aspect-ratio: 16/9;
         display: block;
+        transition: transform 0.3s ease;
     }
+    .outlier-card:hover .thumbnail-img {
+        transform: scale(1.05);
+    }
+
     .outlier-title {
-        font-size: 1.1rem;
+        font-size: 1.15rem;
         font-weight: 700;
-        color: #f0f6fc !important;
+        color: #f8fafc !important;
         text-decoration: none;
-        line-height: 1.35;
+        line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        transition: color 0.2s ease;
     }
     .outlier-title:hover {
-        color: #58a6ff !important;
+        color: #a5b4fc !important;
     }
+
     .outlier-meta {
-        color: #8b949e;
+        color: #94a3b8;
         font-size: 0.85rem;
-        margin-top: 6px;
+        margin-top: 8px;
         display: flex;
-        gap: 12px;
+        gap: 16px;
         align-items: center;
+        font-weight: 500;
     }
     
     /* Badge Outlier Ratio */
     .badge-outlier {
-        background: rgba(248, 81, 73, 0.15);
-        color: #ff7b72;
-        border: 1px solid rgba(248, 81, 73, 0.4);
+        background: rgba(244, 63, 94, 0.12);
+        color: #fb7185;
+        border: 1px solid rgba(244, 63, 94, 0.35);
         font-weight: 800;
-        padding: 6px 14px;
+        padding: 8px 18px;
         border-radius: 20px;
-        font-size: 0.95rem;
+        font-size: 1.05rem;
         display: inline-block;
         text-align: center;
+        box-shadow: 0 0 15px rgba(244, 63, 94, 0.15);
     }
 
     /* Caja de métricas */
     .metric-container {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
+        gap: 12px;
         margin-top: 14px;
     }
     .metric-box {
-        background: #0d1117;
-        border-radius: 6px;
-        padding: 8px 12px;
-        border: 1px solid #21262d;
+        background: rgba(6, 8, 15, 0.6);
+        border-radius: 8px;
+        padding: 10px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
     }
     .metric-label {
-        font-size: 0.7rem;
-        color: #8b949e;
+        font-size: 0.68rem;
+        color: #64748b;
         text-transform: uppercase;
-        font-weight: 600;
-        letter-spacing: 0.05em;
+        font-weight: 700;
+        letter-spacing: 0.06em;
     }
     .metric-value {
-        font-size: 1.05rem;
-        font-weight: 700;
-        color: #c9d1d9;
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #f1f5f9;
         margin-top: 2px;
     }
 
@@ -135,22 +204,29 @@ st.markdown(
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: #21262d;
-        color: #c9d1d9 !important;
-        border: 1px solid #30363d;
-        padding: 9px 16px;
-        border-radius: 6px;
+        background: rgba(30, 41, 59, 0.8);
+        color: #f1f5f9 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 10px 18px;
+        border-radius: 8px;
         text-decoration: none;
         font-weight: 600;
-        font-size: 0.85rem;
+        font-size: 0.88rem;
         transition: all 0.2s ease;
         width: 100%;
+        text-align: center;
     }
     .btn-yt:hover {
         background-color: #FF0000;
         color: #FFFFFF !important;
         border-color: #FF0000;
+        box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3);
     }
+
+    /* Ocultar elementos innecesarios de Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -182,7 +258,6 @@ def fetch_youtube_outliers(
         datetime.now(timezone.utc) - timedelta(days=days_back)
     ).isoformat()
 
-    # Reintento automático en caso de parpadeos de servidor de Google (503, 500)
     def execute_with_retry(request, max_retries=3):
         for attempt in range(max_retries):
             try:
@@ -197,10 +272,6 @@ def fetch_youtube_outliers(
         for i in range(0, len(data), size):
             yield data[i : i + size]
 
-    # 1. Búsqueda de vídeos CON PAGINACIÓN
-    # La API de YouTube solo permite 50 resultados por página, así que
-    # para obtener más (hasta 500) hay que encadenar varias llamadas
-    # usando el pageToken que devuelve cada respuesta.
     items = []
     page_token = None
     while len(items) < max_results:
@@ -230,8 +301,6 @@ def fetch_youtube_outliers(
     video_ids = [item["id"]["videoId"] for item in items]
     channel_ids = list(set(item["snippet"]["channelId"] for item in items))
 
-    # 2. Detalles de vídeos (visitas y duración), en lotes de 50 IDs
-    # (límite máximo permitido por la API en una sola llamada)
     video_details = {}
     for id_batch in chunk_list(video_ids, 50):
         v_req = youtube.videos().list(
@@ -249,7 +318,6 @@ def fetch_youtube_outliers(
 
             video_details[v_id] = {"views": v_views, "seconds": v_seconds}
 
-    # 3. Detalles de canales (suscriptores), también en lotes de 50 IDs
     subs_map = {}
     for id_batch in chunk_list(channel_ids, 50):
         c_req = youtube.channels().list(
@@ -274,7 +342,6 @@ def fetch_youtube_outliers(
         duration_sec = v_info["seconds"]
         subs = subs_map.get(chan_id, 0)
 
-        # Filtro de Shorts (vídeos de 60 segundos o menos)
         if duration_sec <= 60:
             continue
 
@@ -290,7 +357,6 @@ def fetch_youtube_outliers(
             or thumbnails.get("default", {}).get("url", "")
         )
 
-        # Condición para Outliers válidos
         if views > subs and subs > 0 and views >= min_views:
             ratio = round(views / subs, 1)
             outliers.append(
@@ -319,7 +385,7 @@ def render_outliers(outliers):
             <div class="outlier-card">
                 <div style="display: grid; grid-template-columns: 240px 1fr 180px; gap: 20px; align-items: center;">
                     <!-- Columna 1: Thumbnail -->
-                    <div>
+                    <div class="thumbnail-container">
                         <a href="{item['url']}" target="_blank">
                             <img src="{item['thumbnail']}" class="thumbnail-img" alt="Thumbnail">
                         </a>
@@ -360,7 +426,8 @@ def render_outliers(outliers):
 st.markdown(
     """
     <div class="app-header">
-        <div class="app-title">YouTube Outlier Finder</div>
+        <div class="app-badge">⚡ YOUTUBE INTELLIGENCE</div>
+        <div class="app-title">Apex Outliers</div>
         <div class="app-subtitle">Localiza vídeos de alto rendimiento que superan exponencialmente la audiencia base de sus canales.</div>
     </div>
     """,
@@ -368,7 +435,7 @@ st.markdown(
 )
 
 # --- PANEL DE CONTROL ---
-with st.container(border=True):
+with st.container():
     col_q, col_s, col_t = st.columns([2.5, 1, 1])
 
     with col_q:
@@ -401,8 +468,7 @@ with st.container(border=True):
             "Muestreo de búsqueda",
             options=[10, 20, 30, 50, 100, 150, 200, 300, 500],
             value=100,
-            help="Cantidad de vídeos a analizar. Valores altos consumen más cuota de la API "
-            "(cada bloque de 50 vídeos gasta ~100 unidades de cuota diaria).",
+            help="Cantidad de vídeos a analizar. Valores altos consumen más cuota de la API.",
         )
     with col_min_views:
         min_views_input = st.number_input(
@@ -527,11 +593,11 @@ if "outliers_data" in st.session_state:
 # --- FOOTER ---
 st.markdown(
     """
-    <hr style="border: none; border-top: 1px solid #21262d; margin-top: 50px;">
-    <div style="text-align: center; font-size: 12px; color: #8b949e; padding-bottom: 20px;">
+    <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.1); margin-top: 50px;">
+    <div style="text-align: center; font-size: 12px; color: #94a3b8; padding-bottom: 20px;">
         YouTube Outlier Finder • Powered by YouTube Data API v3<br>
-        <a href="https://www.youtube.com/t/terms" target="_blank" style="color: #58a6ff;">Términos de YouTube</a> | 
-        <a href="http://www.google.com/policies/privacy" target="_blank" style="color: #58a6ff;">Política de Privacidad</a>
+        <a href="https://www.youtube.com/t/terms" target="_blank" style="color: #818cf8; text-decoration: none;">Términos de YouTube</a> | 
+        <a href="http://www.google.com/policies/privacy" target="_blank" style="color: #818cf8; text-decoration: none;">Política de Privacidad</a>
     </div>
     """,
     unsafe_allow_html=True,
