@@ -87,7 +87,7 @@ st.markdown(
         background-color: #cc0000;
     }
     </style>
-""",
+    """,
     unsafe_allow_html=True,
 )
 
@@ -282,15 +282,11 @@ time_mapping = {
 # --- EJECUCIÓN ---
 if st.button("Buscar Vídeos Outliers", type="primary", use_container_width=True):
     if not YOUTUBE_API_KEY:
-        st.error(
-            "⚠️ Configura YOUTUBE_API_KEY en los Secrets de Streamlit Cloud."
-        )
+        st.error("⚠️ Configura YOUTUBE_API_KEY en los Secrets de Streamlit Cloud.")
     elif not query:
         st.warning("⚠️ Escribe un término para buscar.")
     else:
-        with st.spinner(
-            f"Escaneando YouTube ({time_option.lower()}) en busca de outliers..."
-        ):
+        with st.spinner(f"Escaneando YouTube ({time_option.lower()}) en busca de outliers..."):
             try:
                 days_back = time_mapping[time_option]
 
@@ -307,9 +303,7 @@ if st.button("Buscar Vídeos Outliers", type="primary", use_container_width=True
                     st.session_state["search_query"] = query
                 else:
                     st.session_state.pop("outliers_data", None)
-                    st.info(
-                        "No se han encontrado vídeos para los criterios seleccionados."
-                    )
+                    st.info("No se han encontrado vídeos para los criterios seleccionados.")
 
             except Exception as e:
                 st.error(f"Error en la consulta: {e}")
@@ -325,9 +319,10 @@ if "outliers_data" in st.session_state and st.session_state["outliers_data"]:
         st.success(f"🔥 ¡Encontrados {len(outliers)} vídeos outliers!")
 
     with col_csv:
-        # Preparar DataFrame estructurado para la descarga
         df_export = pd.DataFrame(outliers)
-        df_csv = df_export[["titulo", "canal", "visitas_num", "suscriptores_num", "ratio", "url"]].rename(
+        df_csv = df_export[
+            ["titulo", "canal", "visitas_num", "suscriptores_num", "ratio", "url"]
+        ].rename(
             columns={
                 "titulo": "Título",
                 "canal": "Canal",
@@ -338,7 +333,10 @@ if "outliers_data" in st.session_state and st.session_state["outliers_data"]:
             }
         )
         csv_bytes = df_csv.to_csv(index=False).encode("utf-8")
-        clean_query = "".join(c for c in st.session_state.get("search_query", "outliers") if c.isalnum() or c in (" ", "_")).rstrip().replace(" ", "_")
+        clean_query = "".join(
+            c for c in st.session_state.get("search_query", "outliers")
+            if c.isalnum() or c in (" ", "_")
+        ).rstrip().replace(" ", "_")
 
         st.download_button(
             label="📥 Descargar resultados en CSV",
@@ -349,7 +347,3 @@ if "outliers_data" in st.session_state and st.session_state["outliers_data"]:
         )
 
     render_outliers(outliers)
-                    )
-
-            except Exception as e:
-                st.error(f"Error en la consulta: {e}")
