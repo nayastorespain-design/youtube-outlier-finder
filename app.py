@@ -77,34 +77,40 @@ st.markdown(
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
     }
 
-    /* Botón Primario (SaaS Enterprise Style) */
+    /* ETIQUETAS DE TEXTO EN BLANCO PURO */
+    [data-testid="stWidgetLabel"] p, label, .stSlider label {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+        letter-spacing: 0.01em !important;
+    }
+
+    /* BOTÓN PRIMARIO ENTERPRISE */
     .stButton > button {
         background-color: #4f46e5 !important;
         color: #ffffff !important;
-        font-weight: 600 !important;
-        font-size: 0.95rem !important;
+        font-weight: 700 !important;
+        font-size: 1.05rem !important;
         border: 1px solid #6366f1 !important;
         border-radius: 8px !important;
-        padding: 10px 20px !important;
-        transition: all 0.2s ease-in-out !important;
-        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
-        letter-spacing: 0.01em !important;
+        padding: 14px 28px !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3) !important;
+        letter-spacing: 0.03em !important;
+        text-transform: uppercase !important;
     }
     .stButton > button:hover {
         background-color: #4338ca !important;
         border-color: #818cf8 !important;
-        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25) !important;
-        transform: translateY(-1px) !important;
+        box-shadow: 0 6px 20px rgba(79, 70, 229, 0.45) !important;
+        transform: translateY(-2px) !important;
     }
     .stButton > button:active {
         transform: translateY(0) !important;
         background-color: #3730a3 !important;
     }
-    .stButton > button:focus {
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4) !important;
-    }
 
-    /* Estilo específico para el botón de Exportar CSV (Descarga) */
+    /* Estilo específico para el botón de Exportar CSV */
     .stDownloadButton > button {
         background: rgba(30, 41, 59, 0.85) !important;
         color: #a5b4fc !important;
@@ -512,7 +518,7 @@ with st.container():
         )
 
     btn_search = st.button(
-        "Buscar outliers", type="primary", use_container_width=True
+        "EJECUTAR ANÁLISIS DE OUTLIERS", type="primary", use_container_width=True
     )
 
 sort_mapping = {
