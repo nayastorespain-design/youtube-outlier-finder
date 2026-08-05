@@ -189,7 +189,7 @@ st.markdown(
         align-items: center;
         font-weight: 500;
     }
-    
+
     /* Badge Outlier Ratio */
     .badge-outlier {
         background: rgba(244, 63, 94, 0.12);
@@ -396,7 +396,7 @@ def fetch_youtube_outliers(
         )
 
         if views > subs and subs > 0 and views >= min_views:
-            ratio = round(views / subs, 1)
+            ratio_val = round(views / subs, 1)
             outliers.append(
                 {
                     "titulo": item["snippet"]["title"],
@@ -405,12 +405,16 @@ def fetch_youtube_outliers(
                     "thumbnail": thumb_url,
                     "visitas_num": views,
                     "suscriptores_num": subs,
+                    "ratio_num": ratio_val,
                     "visitas": f"{views:,}",
                     "suscriptores": f"{subs:,}",
-                    "ratio": f"{ratio}x",
+                    "ratio": f"{ratio_val}x",
                     "url": f"https://www.youtube.com/watch?v={vid_id}",
                 }
             )
+
+    # Ordenar por multiplicador (ratio) de mayor a menor
+    outliers = sorted(outliers, key=lambda x: x["ratio_num"], reverse=True)
 
     return outliers
 
