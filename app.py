@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # --- CONFIGURACIÓN DE PAGO ---
-PAYMENT_URL = "https://tu-pagina-de-pago.com"  # Reemplazar con tu enlace de Stripe/LemonSqueezy/etc.
+PAYMENT_URL = "https://tu-pagina-de-pago.com"  # Reemplazar con tu enlace de Stripe/LemonSqueezy/Hotmart/etc.
 
 # --- ESTILOS CSS PREMIUM (GLASSMORPHISM, MODERN SAAS & PAYWALL) ---
 st.markdown(
@@ -276,7 +276,7 @@ st.markdown(
         left: 0;
         right: 0;
         bottom: 0;
-        background: linear-gradient(180deg, rgba(6, 8, 15, 0.1) 0%, rgba(6, 8, 15, 0.85) 40%, rgba(6, 8, 15, 0.98) 100%);
+        background: linear-gradient(180deg, rgba(6, 8, 15, 0.1) 0%, rgba(6, 8, 15, 0.85) 30%, rgba(6, 8, 15, 0.98) 100%);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -286,7 +286,7 @@ st.markdown(
         border-radius: 16px;
     }}
     .paywall-card {{
-        background: rgba(15, 23, 42, 0.9);
+        background: rgba(15, 23, 42, 0.95);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
         border: 1px solid rgba(99, 102, 241, 0.4);
@@ -498,48 +498,14 @@ def get_card_html(item, is_blurred=False):
     channel = "Canal Oculto" if is_blurred else item["canal"]
     url = "#" if is_blurred else item["url"]
     blur_class = "blurred-item" if is_blurred else ""
-    
-    # Imagen dummy para evitar la carga de thumbnails reales si está bloqueado
+
     thumb = (
         "https://via.placeholder.com/480x270/0f172a/6366f1?text=Apex+Pro+Only"
         if is_blurred
         else item["thumbnail"]
     )
 
-    return f"""
-    <div class="outlier-card {blur_class}">
-        <div style="display: grid; grid-template-columns: 240px 1fr 180px; gap: 20px; align-items: center;">
-            <div class="thumbnail-container">
-                <a href="{url}" target="_blank">
-                    <img src="{thumb}" class="thumbnail-img" alt="Thumbnail">
-                </a>
-            </div>
-            <div>
-                <a href="{url}" target="_blank" class="outlier-title">{title}</a>
-                <div class="outlier-meta">
-                    <span>📺 {channel}</span>
-                    <span>📅 {item['fecha']}</span>
-                </div>
-                <div class="metric-container">
-                    <div class="metric-box">
-                        <div class="metric-label">Visitas</div>
-                        <div class="metric-value">{item['visitas']}</div>
-                    </div>
-                    <div class="metric-box">
-                        <div class="metric-label">Suscriptores</div>
-                        <div class="metric-value">{item['suscriptores']}</div>
-                    </div>
-                </div>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 14px; align-items: stretch; text-align: center;">
-                <div>
-                    <span class="badge-outlier">🔥 {item['ratio']}</span>
-                </div>
-                <a href="{url}" target="_blank" class="btn-yt">▶ Ver en YouTube</a>
-            </div>
-        </div>
-    </div>
-    """
+    return f"""<div class="outlier-card {blur_class}"><div style="display: grid; grid-template-columns: 240px 1fr 180px; gap: 20px; align-items: center;"><div class="thumbnail-container"><a href="{url}" target="_blank"><img src="{thumb}" class="thumbnail-img" alt="Thumbnail"></a></div><div><a href="{url}" target="_blank" class="outlier-title">{title}</a><div class="outlier-meta"><span>📺 {channel}</span><span>📅 {item['fecha']}</span></div><div class="metric-container"><div class="metric-box"><div class="metric-label">Visitas</div><div class="metric-value">{item['visitas']}</div></div><div class="metric-box"><div class="metric-label">Suscriptores</div><div class="metric-value">{item['suscriptores']}</div></div></div></div><div style="display: flex; flex-direction: column; gap: 14px; align-items: stretch; text-align: center;"><div><span class="badge-outlier">🔥 {item['ratio']}</span></div><a href="{url}" target="_blank" class="btn-yt">▶ Ver en YouTube</a></div></div></div>"""
 
 
 # --- RENDERIZADO CON PAYWALL ---
@@ -548,7 +514,7 @@ def render_outliers_with_paywall(outliers):
     visible_outliers = outliers[:free_limit]
     locked_outliers = outliers[free_limit:]
 
-    # 1. Renderizar los primeros 2 resultados libres de forma limpia
+    # 1. Renderizar los primeros 2 resultados libres
     for item in visible_outliers:
         st.markdown(get_card_html(item, is_blurred=False), unsafe_allow_html=True)
 
@@ -556,27 +522,13 @@ def render_outliers_with_paywall(outliers):
     if locked_outliers:
         locked_count = len(locked_outliers)
         
-        # Mostramos hasta 3 tarjetas de muestra borrosas
+        # Generar vista previa de hasta 3 tarjetas borrosas
         preview_locked = locked_outliers[:3]
         locked_html_cards = "".join([get_card_html(item, is_blurred=True) for item in preview_locked])
 
-        paywall_wrapper = f"""
-        <div class="locked-container">
-            {locked_html_cards}
-            <div class="paywall-overlay">
-                <div class="paywall-card">
-                    <div class="paywall-icon">🔒</div>
-                    <div class="paywall-title">Desbloquea {locked_count} Outliers más</div>
-                    <div class="paywall-desc">
-                        Estás viendo una vista previa gratuita. Suscríbete al plan Pro de Apex Intelligence para consultar la lista completa de vídeos viralizados y exportar todos los datos.
-                    </div>
-                    <a href="{PAYMENT_URL}" target="_blank" class="btn-paywall">
-                        Obtener Acceso Ilimitado
-                    </a>
-                </div>
-            </div>
-        </div>
-        """
+        # Cadena limpia en una sola línea sin sangrías iniciales para evitar errores de renderizado en Streamlit
+        paywall_wrapper = f"""<div class="locked-container">{locked_html_cards}<div class="paywall-overlay"><div class="paywall-card"><div class="paywall-icon">🔒</div><div class="paywall-title">Desbloquea {locked_count} Outliers más</div><div class="paywall-desc">Estás viendo una vista previa gratuita. Suscríbete al plan Pro de Apex Intelligence para consultar la lista completa de vídeos viralizados y exportar todos los datos.</div><a href="{PAYMENT_URL}" target="_blank" class="btn-paywall">Obtener Acceso Ilimitado</a></div></div></div>"""
+        
         st.markdown(paywall_wrapper, unsafe_allow_html=True)
 
 
@@ -699,7 +651,7 @@ if "outliers_data" in st.session_state:
             st.markdown(f"### ⚡ {len(outliers)} Outliers detectados")
 
         with col_export:
-            # Solo se permite exportar al CSV los 2 primeros si el usuario no ha pagado
+            # Solo se permite exportar al CSV la muestra gratuita (2 primeros)
             free_outliers = outliers[:2]
             df_export = pd.DataFrame(free_outliers)
 
