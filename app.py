@@ -77,25 +77,31 @@ st.markdown(
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
     }
 
-    /* Botón Primario */
+    /* Botón Primario (SaaS Enterprise Style) */
     .stButton > button {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%) !important;
+        background-color: #4f46e5 !important;
         color: #ffffff !important;
-        font-weight: 700 !important;
-        font-size: 1rem !important;
-        border: none !important;
-        border-radius: 10px !important;
-        padding: 12px 24px !important;
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35) !important;
-        letter-spacing: 0.02em !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+        border: 1px solid #6366f1 !important;
+        border-radius: 8px !important;
+        padding: 10px 20px !important;
+        transition: all 0.2s ease-in-out !important;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        letter-spacing: 0.01em !important;
     }
     .stButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 8px 30px rgba(99, 102, 241, 0.55) !important;
+        background-color: #4338ca !important;
+        border-color: #818cf8 !important;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25) !important;
+        transform: translateY(-1px) !important;
     }
     .stButton > button:active {
         transform: translateY(0) !important;
+        background-color: #3730a3 !important;
+    }
+    .stButton > button:focus {
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4) !important;
     }
 
     /* Estilo específico para el botón de Exportar CSV (Descarga) */
@@ -104,7 +110,7 @@ st.markdown(
         color: #a5b4fc !important;
         border: 1px solid rgba(99, 102, 241, 0.4) !important;
         font-weight: 700 !important;
-        border-radius: 10px !important;
+        border-radius: 8px !important;
         padding: 10px 20px !important;
         transition: all 0.3s ease !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
@@ -115,7 +121,7 @@ st.markdown(
         color: #ffffff !important;
         border-color: #6366f1 !important;
         box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4) !important;
-        transform: translateY(-2px) !important;
+        transform: translateY(-1px) !important;
     }
 
     /* Tarjetas de Outliers */
@@ -506,7 +512,7 @@ with st.container():
         )
 
     btn_search = st.button(
-        "🔍 Buscar Outliers", type="primary", use_container_width=True
+        "Buscar outliers", type="primary", use_container_width=True
     )
 
 sort_mapping = {
@@ -531,7 +537,7 @@ if btn_search:
     elif not query:
         st.warning("⚠️ Introduce una palabra clave.")
     else:
-        with st.spinner("Escaneando vídeos y filtrando métricas..."):
+        with st.spinner("Analizando métricas del canal y vídeos..."):
             try:
                 days_back = time_mapping[time_option]
                 outliers = fetch_youtube_outliers(
