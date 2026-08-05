@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 import requests
 import streamlit as st
@@ -90,36 +91,20 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Claves API desde Secrets
+# Clave API desde Secrets
 YOUTUBE_API_KEY = st.secrets.get("YOUTUBE_API_KEY")
-LEMON_API_KEY = st.secrets.get("LEMON_API_KEY")
 
-# --- VALIDACIÓN DE LICENCIA ---
-
-
-def validate_license_key(license_key):
-    if not LEMON_API_KEY or not license_key:
-        return False
-    url = "https://api.lemonsqueezy.com/v1/licenses/validate"
-    headers = {
-        "Accept": "application/json",
-        "Authorization": f"Bearer {LEMON_API_KEY}",
-    }
-    try:
-        response = requests.post(
-            url, headers=headers, data={"license_key": license_key}
-        )
-        return response.json().get("valid", False)
-    except Exception:
-        return False
-
-
-# --- CONSULTA A LA API (OPTIMIZADA) ---
+# --- CONSULTA A LA API (OPTIMIZADA + FILTRO TEMPORAL) ---
 @st.cache_data(ttl=43200, show_spinner=False)
-def fetch_youtube_outliers(api_key, query, order, max_results):
+def fetch_youtube_outliers(api_key, query, order, days_back, max_results):
     youtube = build("youtube", "v3", developerKey=api_key)
 
-    # 1. Búsqueda básica
+    # Calcular la fecha límite dinámica
+    published_after = (
+        datetime.now(timezone.utc) - timedelta(days=days_back)
+    ).isoformat()
+
+    # 1. Búsqueda filtrada por fecha
     search_res = (
         youtube.search()
         .list(
@@ -127,6 +112,7 @@ def fetch_youtube_outliers(api_key, query, order, max_results):
             part="snippet",
             type="video",
             order=order,
+            publishedAfter=published_after,
             maxResults=max_results,
         )
         .execute()
@@ -175,6 +161,8 @@ def fetch_youtube_outliers(api_key, query, order, max_results):
                 {
                     "titulo": item["snippet"]["title"],
                     "canal": item["snippet"]["channelTitle"],
+                    "visitas_num": views,
+                    "suscriptores_num": subs,
                     "visitas": f"{views:,}",
                     "suscriptores": f"{subs:,}",
                     "ratio": f"{ratio}x",
@@ -186,8 +174,6 @@ def fetch_youtube_outliers(api_key, query, order, max_results):
 
 
 # --- RENDERIZADO DE RESULTADOS EN TARJETAS ---
-
-
 def render_outliers(outliers):
     for item in outliers:
         st.markdown(
@@ -227,27 +213,10 @@ st.write(
     "Descubre ideas de vídeo virales localizando contenidos que superan con creces la audiencia habitual de sus canales."
 )
 
-# --- BARRA LATERAL (PRO ACCESS & LEGAL) ---
+# --- BARRA LATERAL (LEGAL) ---
 with st.sidebar:
-    st.header("🔑 Licencia PRO")
-    user_license = st.text_input(
-        "Clave de licencia:", type="password", placeholder="Paste key here"
-    )
-
-    is_pro = False
-    if user_license:
-        with st.spinner("Validando..."):
-            is_pro = validate_license_key(user_license)
-            if is_pro:
-                st.success("✅ Licencia PRO Activa")
-            else:
-                st.error("❌ Licencia no válida")
-    else:
-        st.info("ℹ️ **Modo Demo:** Muestra 1 resultado.")
-        st.markdown(
-            "[👉 **Obtener clave PRO**](https://tu-tienda.lemonsqueezy.com)"
-        )
-
+    st.header("⚙️ Información")
+    st.success("⚡ Modo completo activado")
     st.divider()
 
     # Requisitos legales exigidos por la API de YouTube
@@ -263,7 +232,7 @@ with st.sidebar:
     )
 
 # --- FORMULARIO DE BÚSQUEDA ---
-col_q, col_s = st.columns([2, 1])
+col_q, col_s, col_t = st.columns([2, 1, 1])
 
 with col_q:
     query = st.text_input(
@@ -277,19 +246,37 @@ with col_s:
         options=["Relevancia", "Más reproducidos", "Más recientes"],
     )
 
+with col_t:
+    time_option = st.selectbox(
+        "📅 Antigüedad máxima:",
+        options=[
+            "Último mes",
+            "Últimos 3 meses",
+            "Últimos 6 meses",
+            "Último año",
+        ],
+        index=3,
+    )
+
 max_results = st.slider(
     "Profundidad de escaneo (vídeos):",
     min_value=10,
     max_value=50,
     value=30,
     step=5,
-    disabled=not is_pro,
 )
 
 sort_mapping = {
     "Relevancia": "relevance",
     "Más reproducidos": "viewCount",
     "Más recientes": "date",
+}
+
+time_mapping = {
+    "Último mes": 30,
+    "Últimos 3 meses": 90,
+    "Últimos 6 meses": 180,
+    "Último año": 365,
 }
 
 # --- EJECUCIÓN ---
@@ -301,35 +288,67 @@ if st.button("Buscar Vídeos Outliers", type="primary", use_container_width=True
     elif not query:
         st.warning("⚠️ Escribe un término para buscar.")
     else:
-        with st.spinner("Escaneando YouTube en busca de outliers..."):
+        with st.spinner(
+            f"Escaneando YouTube ({time_option.lower()}) en busca de outliers..."
+        ):
             try:
-                search_limit = max_results if is_pro else 10
+                days_back = time_mapping[time_option]
+
                 outliers = fetch_youtube_outliers(
                     YOUTUBE_API_KEY,
                     query,
                     sort_mapping[sort_option],
-                    search_limit,
+                    days_back,
+                    max_results,
                 )
 
-                if not is_pro and outliers:
-                    outliers = outliers[:1]
-
                 if outliers:
-                    st.divider()
-                    if is_pro:
-                        st.success(
-                            f"🔥 ¡Encontrados {len(outliers)} vídeos outliers!"
-                        )
-                    else:
-                        st.warning(
-                            "🔒 **Modo Demo:** Mostrando solo el 1.er resultado. Activa tu licencia PRO para ver el resto."
-                        )
-
-                    # Mostrar resultados maquetados en tarjetas
-                    render_outliers(outliers)
+                    st.session_state["outliers_data"] = outliers
+                    st.session_state["search_query"] = query
                 else:
+                    st.session_state.pop("outliers_data", None)
                     st.info(
-                        "No se han encontrado vídeos con más visitas que suscriptores para esta consulta."
+                        "No se han encontrado vídeos para los criterios seleccionados."
+                    )
+
+            except Exception as e:
+                st.error(f"Error en la consulta: {e}")
+
+# --- MOSTRAR RESULTADOS Y BOTÓN DE DESCARGA CSV ---
+if "outliers_data" in st.session_state and st.session_state["outliers_data"]:
+    outliers = st.session_state["outliers_data"]
+    st.divider()
+
+    col_res_header, col_csv = st.columns([2, 1])
+
+    with col_res_header:
+        st.success(f"🔥 ¡Encontrados {len(outliers)} vídeos outliers!")
+
+    with col_csv:
+        # Preparar DataFrame estructurado para la descarga
+        df_export = pd.DataFrame(outliers)
+        df_csv = df_export[["titulo", "canal", "visitas_num", "suscriptores_num", "ratio", "url"]].rename(
+            columns={
+                "titulo": "Título",
+                "canal": "Canal",
+                "visitas_num": "Visitas",
+                "suscriptores_num": "Suscriptores",
+                "ratio": "Multiplicador Outlier",
+                "url": "Enlace YouTube",
+            }
+        )
+        csv_bytes = df_csv.to_csv(index=False).encode("utf-8")
+        clean_query = "".join(c for c in st.session_state.get("search_query", "outliers") if c.isalnum() or c in (" ", "_")).rstrip().replace(" ", "_")
+
+        st.download_button(
+            label="📥 Descargar resultados en CSV",
+            data=csv_bytes,
+            file_name=f"outliers_{clean_query}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    render_outliers(outliers)
                     )
 
             except Exception as e:
