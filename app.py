@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import re
 import pandas as pd
 import streamlit as st
 from googleapiclient.discovery import build
@@ -148,23 +149,37 @@ st.markdown(
 # Clave API desde Secrets
 YOUTUBE_API_KEY = st.secrets.get("YOUTUBE_API_KEY")
 
-# --- CONSULTA A LA API CON FILTROS PROFESIONALES ---
+
+# Helper para convertir la duración en formato ISO 8601 a segundos
+def parse_duration_to_seconds(duration_str):
+    match = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration_str)
+    if not match:
+        return 0
+    hours = int(match.group(1) or 0)
+    minutes = int(match.group(2) or 0)
+    seconds = int(match.group(3) or 0)
+    return hours * 3600 + minutes * 60 + seconds
+
+
+# --- CONSULTA A LA API (FILTRADO ANTI-SHORTS PRECISO) ---
 @st.cache_data(ttl=43200, show_spinner=False)
-def fetch_youtube_outliers(api_key, query, order, days_back, max_results, min_views=1000):
+def fetch_youtube_outliers(
+    api_key, query, order, days_back, max_results, min_views=1000
+):
     youtube = build("youtube", "v3", developerKey=api_key)
 
     published_after = (
         datetime.now(timezone.utc) - timedelta(days=days_back)
     ).isoformat()
 
-    # Búsqueda excluyendo Shorts con videoDuration='medium'
+    # Petición a la API (buscamos cualquier duración y luego filtramos manualmente los <=60s)
     search_res = (
         youtube.search()
         .list(
             q=query,
             part="snippet",
             type="video",
-            videoDuration="medium",
+            videoDuration="any",
             order=order,
             publishedAfter=published_after,
             maxResults=max_results,
@@ -179,16 +194,25 @@ def fetch_youtube_outliers(api_key, query, order, days_back, max_results, min_vi
     video_ids = [item["id"]["videoId"] for item in items]
     channel_ids = [item["snippet"]["channelId"] for item in items]
 
+    # Obtenemos visitas y duración exacta del vídeo (contentDetails)
     v_res = (
         youtube.videos()
-        .list(part="statistics", id=",".join(video_ids))
+        .list(part="statistics,contentDetails", id=",".join(video_ids))
         .execute()
     )
-    views_map = {
-        v_item["id"]: int(v_item["statistics"].get("viewCount", 0))
-        for v_item in v_res.get("items", [])
-    }
 
+    video_details = {}
+    for v_item in v_res.get("items", []):
+        v_id = v_item["id"]
+        v_views = int(v_item["statistics"].get("viewCount", 0))
+        v_duration_raw = v_item.get("contentDetails", {}).get(
+            "duration", "PT0S"
+        )
+        v_seconds = parse_duration_to_seconds(v_duration_raw)
+
+        video_details[v_id] = {"views": v_views, "seconds": v_seconds}
+
+    # Obtenemos suscriptores de los canales
     c_res = (
         youtube.channels()
         .list(part="statistics", id=",".join(set(channel_ids)))
@@ -203,12 +227,20 @@ def fetch_youtube_outliers(api_key, query, order, days_back, max_results, min_vi
     for item in items:
         vid_id = item["id"]["videoId"]
         chan_id = item["snippet"]["channelId"]
-        views = views_map.get(vid_id, 0)
+
+        v_info = video_details.get(vid_id, {"views": 0, "seconds": 0})
+        views = v_info["views"]
+        duration_sec = v_info["seconds"]
         subs = subs_map.get(chan_id, 0)
 
-        # Formatear fecha
+        # FILTRO DE SHORTS: Si dura 60 segundos o menos, lo ignoramos
+        if duration_sec <= 60:
+            continue
+
         pub_raw = item["snippet"]["publishedAt"]
-        pub_date = datetime.fromisoformat(pub_raw.replace("Z", "+00:00")).strftime("%d %b %Y")
+        pub_date = datetime.fromisoformat(
+            pub_raw.replace("Z", "+00:00")
+        ).strftime("%d %b %Y")
 
         thumbnails = item["snippet"].get("thumbnails", {})
         thumb_url = (
@@ -217,7 +249,7 @@ def fetch_youtube_outliers(api_key, query, order, days_back, max_results, min_vi
             or thumbnails.get("default", {}).get("url", "")
         )
 
-        # Filtro de Outlier Real: más de subs Y al menos min_views (p. ej. 1,000 visitas)
+        # Condición para ser un Outlier relevante
         if views > subs and subs > 0 and views >= min_views:
             ratio = round(views / subs, 1)
             outliers.append(
@@ -238,20 +270,20 @@ def fetch_youtube_outliers(api_key, query, order, days_back, max_results, min_vi
     return outliers
 
 
-# --- RENDERIZADO OPTIMIZADO ---
+# --- RENDERIZADO DE RESULTADOS ---
 def render_outliers(outliers):
     for item in outliers:
         st.markdown(
             f"""
             <div class="outlier-card">
                 <div style="display: grid; grid-template-columns: 240px 1fr 180px; gap: 20px; align-items: center;">
-                    <!-- Columna 1: Thumbnail limpia -->
+                    <!-- Columna 1: Thumbnail -->
                     <div>
                         <a href="{item['url']}" target="_blank">
                             <img src="{item['thumbnail']}" class="thumbnail-img" alt="Thumbnail">
                         </a>
                     </div>
-                    <!-- Columna 2: Título, Canal, Fecha y Métricas -->
+                    <!-- Columna 2: Info Principal -->
                     <div>
                         <a href="{item['url']}" target="_blank" class="outlier-title">{item['titulo']}</a>
                         <div class="outlier-meta">
@@ -269,7 +301,7 @@ def render_outliers(outliers):
                             </div>
                         </div>
                     </div>
-                    <!-- Columna 3: Badge y Botón de Acción -->
+                    <!-- Columna 3: Ratio y Acción -->
                     <div style="display: flex; flex-direction: column; gap: 14px; align-items: stretch; text-align: center;">
                         <div>
                             <span class="badge-outlier">🔥 {item['ratio']}</span>
@@ -294,14 +326,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- PANEL DE BÚSQUEDA ---
+# --- PANEL DE CONTROL ---
 with st.container(border=True):
     col_q, col_s, col_t = st.columns([2.5, 1, 1])
 
     with col_q:
         query = st.text_input(
             "Palabra clave o Nicho",
-            placeholder="Ej. huerto urbano, espresso, finanzas...",
+            placeholder="Ej. huerto urbano, riego tomate, finanzas...",
         )
 
     with col_s:
@@ -327,7 +359,7 @@ with st.container(border=True):
         max_results = st.select_slider(
             "Muestreo de búsqueda",
             options=[10, 20, 30, 40, 50],
-            value=30,
+            value=50,
         )
     with col_min_views:
         min_views_input = st.number_input(
@@ -338,7 +370,9 @@ with st.container(border=True):
             help="Filtra vídeos irrelevantes de canales recién creados.",
         )
 
-    btn_search = st.button("🔍 Buscar Outliers", type="primary", use_container_width=True)
+    btn_search = st.button(
+        "🔍 Buscar Outliers", type="primary", use_container_width=True
+    )
 
 sort_mapping = {
     "Relevancia": "relevance",
@@ -353,10 +387,12 @@ time_mapping = {
     "Último año": 365,
 }
 
-# --- EJECUCIÓN ---
+# --- EJECUCIÓN DE BÚSQUEDA ---
 if btn_search:
     if not YOUTUBE_API_KEY:
-        st.error("⚠️ Configura YOUTUBE_API_KEY en los Secrets de Streamlit Cloud.")
+        st.error(
+            "⚠️ Configura YOUTUBE_API_KEY en los Secrets de Streamlit Cloud."
+        )
     elif not query:
         st.warning("⚠️ Introduce una palabra clave.")
     else:
@@ -377,15 +413,17 @@ if btn_search:
                     st.session_state["search_query"] = query
                 else:
                     st.session_state.pop("outliers_data", None)
-                    st.info("No se encontraron outliers con los filtros actuales.")
+                    st.info(
+                        "No se encontraron outliers con los filtros actuales."
+                    )
 
             except Exception as e:
                 st.error(f"Error en la consulta: {e}")
 
-# --- RESULTADOS Y CSV ---
+# --- MOSTRAR RESULTADOS Y EXPORTACIÓN ---
 if "outliers_data" in st.session_state:
     outliers = st.session_state["outliers_data"]
-    
+
     if outliers and len(outliers) > 0:
         st.markdown("<br>", unsafe_allow_html=True)
         col_info, col_export = st.columns([3, 1], vertical_alignment="center")
@@ -395,9 +433,20 @@ if "outliers_data" in st.session_state:
 
         with col_export:
             df_export = pd.DataFrame(outliers)
-            expected_cols = ["titulo", "canal", "fecha", "visitas_num", "suscriptores_num", "ratio", "url", "thumbnail"]
-            available_cols = [col for col in expected_cols if col in df_export.columns]
-            
+            expected_cols = [
+                "titulo",
+                "canal",
+                "fecha",
+                "visitas_num",
+                "suscriptores_num",
+                "ratio",
+                "url",
+                "thumbnail",
+            ]
+            available_cols = [
+                col for col in expected_cols if col in df_export.columns
+            ]
+
             df_csv = df_export[available_cols].rename(
                 columns={
                     "titulo": "Título",
@@ -410,12 +459,17 @@ if "outliers_data" in st.session_state:
                     "thumbnail": "URL Miniatura",
                 }
             )
-            
+
             csv_bytes = df_csv.to_csv(index=False).encode("utf-8")
-            clean_query = "".join(
-                c for c in st.session_state.get("search_query", "outliers")
-                if c.isalnum() or c in (" ", "_")
-            ).rstrip().replace(" ", "_")
+            clean_query = (
+                "".join(
+                    c
+                    for c in st.session_state.get("search_query", "outliers")
+                    if c.isalnum() or c in (" ", "_")
+                )
+                .rstrip()
+                .replace(" ", "_")
+            )
 
             st.download_button(
                 label="📥 Exportar CSV",
