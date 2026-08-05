@@ -373,45 +373,51 @@ if btn_search:
                 st.error(f"Error procesando la solicitud: {e}")
 
 # --- RESULTADOS Y DESCARGA ---
-if "outliers_data" in st.session_state and st.session_state["outliers_data"]:
+if "outliers_data" in st.session_state:
     outliers = st.session_state["outliers_data"]
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    col_info, col_export = st.columns([3, 1], vertical_alignment="center")
+    if outliers and len(outliers) > 0:
+        st.markdown("<br>", unsafe_allow_html=True)
+        col_info, col_export = st.columns([3, 1], vertical_alignment="center")
 
-    with col_info:
-        st.markdown(f"### ⚡ {len(outliers)} Outliers detectados")
+        with col_info:
+            st.markdown(f"### ⚡ {len(outliers)} Outliers detectados")
 
-    with col_export:
-        df_export = pd.DataFrame(outliers)
-        df_csv = df_export[
-            ["titulo", "canal", "visitas_num", "suscriptores_num", "ratio", "url", "thumbnail"]
-        ].rename(
-            columns={
-                "titulo": "Título",
-                "canal": "Canal",
-                "visitas_num": "Visitas",
-                "suscriptores_num": "Suscriptores",
-                "ratio": "Multiplicador Outlier",
-                "url": "Enlace YouTube",
-                "thumbnail": "URL Miniatura",
-            }
-        )
-        csv_bytes = df_csv.to_csv(index=False).encode("utf-8")
-        clean_query = "".join(
-            c for c in st.session_state.get("search_query", "outliers")
-            if c.isalnum() or c in (" ", "_")
-        ).rstrip().replace(" ", "_")
+        with col_export:
+            # Construcción segura del DataFrame
+            df_export = pd.DataFrame(outliers)
+            
+            # Verificamos que las columnas existan antes de filtrar
+            expected_cols = ["titulo", "canal", "visitas_num", "suscriptores_num", "ratio", "url", "thumbnail"]
+            available_cols = [col for col in expected_cols if col in df_export.columns]
+            
+            df_csv = df_export[available_cols].rename(
+                columns={
+                    "titulo": "Título",
+                    "canal": "Canal",
+                    "visitas_num": "Visitas",
+                    "suscriptores_num": "Suscriptores",
+                    "ratio": "Multiplicador Outlier",
+                    "url": "Enlace YouTube",
+                    "thumbnail": "URL Miniatura",
+                }
+            )
+            
+            csv_bytes = df_csv.to_csv(index=False).encode("utf-8")
+            clean_query = "".join(
+                c for c in st.session_state.get("search_query", "outliers")
+                if c.isalnum() or c in (" ", "_")
+            ).rstrip().replace(" ", "_")
 
-        st.download_button(
-            label="📥 Exportar CSV",
-            data=csv_bytes,
-            file_name=f"outliers_{clean_query}.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
+            st.download_button(
+                label="📥 Exportar CSV",
+                data=csv_bytes,
+                file_name=f"outliers_{clean_query}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
 
-    render_outliers(outliers)
+        render_outliers(outliers)
 
 # --- FOOTER DISCRETO ---
 st.markdown(
