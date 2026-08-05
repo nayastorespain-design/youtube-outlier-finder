@@ -527,7 +527,7 @@ def render_outliers_with_paywall(outliers):
         locked_html_cards = "".join([get_card_html(item, is_blurred=True) for item in preview_locked])
 
         # Cadena limpia en una sola línea sin sangrías iniciales para evitar errores de renderizado en Streamlit
-        paywall_wrapper = f"""<div class="locked-container">{locked_html_cards}<div class="paywall-overlay"><div class="paywall-card"><div class="paywall-icon">🔒</div><div class="paywall-title">Desbloquea {locked_count} Outliers más</div><div class="paywall-desc">Estás viendo una vista previa gratuita. Suscríbete al plan Pro de Apex Intelligence para consultar la lista completa de vídeos viralizados y exportar todos los datos.</div><a href="{PAYMENT_URL}" target="_blank" class="btn-paywall">Obtener Acceso Ilimitado</a></div></div></div>"""
+        paywall_wrapper = f"""<div class="locked-container">{locked_html_cards}<div class="paywall-overlay"><div class="paywall-card"><div class="paywall-icon">🔒</div><div class="paywall-title">Desbloquea todos los resultados</div><div class="paywall-desc">Estás viendo una vista previa gratuita. Suscríbete al plan Pro de Apex Intelligence para consultar la lista completa de vídeos viralizados y exportar todos los datos.</div><a href="{PAYMENT_URL}" target="_blank" class="btn-paywall">Obtener Acceso Ilimitado</a></div></div></div>"""
         
         st.markdown(paywall_wrapper, unsafe_allow_html=True)
 
