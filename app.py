@@ -8,11 +8,19 @@ from googleapiclient.errors import HttpError
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="YouTube Outlier Finder | SaaS Pro",
+    page_title="Apex Outliers | YouTube Intelligence",
     page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="collapsed",
+    layout="wide"
 )
+
+# Header principal en el Dashboard
+st.markdown("""
+    <h1 style='text-align: center; margin-bottom: 0;'>⚡ APEX OUTLIERS</h1>
+    <p style='text-align: center; color: #888; font-size: 1.1rem; margin-top: 4px;'>
+        Buscador de vídeos con rendimiento excepcional para YouTube
+    </p>
+    <hr style='border: 0; height: 1px; background: #333; margin-bottom: 30px;'>
+""", unsafe_allow_html=True)
 
 # --- ESTILOS CSS REFINADOS ---
 st.markdown(
