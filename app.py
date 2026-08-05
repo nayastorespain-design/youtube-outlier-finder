@@ -171,7 +171,7 @@ def parse_duration_to_seconds(duration_str):
     return hours * 3600 + minutes * 60 + seconds
 
 
-# --- CONSULTA A LA API (CON RESILIENCIA 503 Y FILTRADO PRECISO DE SHORTS) ---
+# --- CONSULTA A LA API (CON RESILIENCIA 503, PAGINACIÓN Y FILTRADO PRECISO DE SHORTS) ---
 @st.cache_data(ttl=43200, show_spinner=False)
 def fetch_youtube_outliers(
     api_key, query, order, days_back, max_results, min_views=1000
@@ -193,52 +193,76 @@ def fetch_youtube_outliers(
                 else:
                     raise e
 
-    # 1. Búsqueda de vídeos
-    search_req = youtube.search().list(
-        q=query,
-        part="snippet",
-        type="video",
-        videoDuration="any",
-        order=order,
-        publishedAfter=published_after,
-        maxResults=max_results,
-    )
-    search_res = execute_with_retry(search_req)
+    def chunk_list(data, size=50):
+        for i in range(0, len(data), size):
+            yield data[i : i + size]
 
-    items = search_res.get("items", [])
+    # 1. Búsqueda de vídeos CON PAGINACIÓN
+    # La API de YouTube solo permite 50 resultados por página, así que
+    # para obtener más (hasta 500) hay que encadenar varias llamadas
+    # usando el pageToken que devuelve cada respuesta.
+    items = []
+    page_token = None
+    while len(items) < max_results:
+        remaining = max_results - len(items)
+        search_req = youtube.search().list(
+            q=query,
+            part="snippet",
+            type="video",
+            videoDuration="any",
+            order=order,
+            publishedAfter=published_after,
+            maxResults=min(50, remaining),
+            pageToken=page_token,
+        )
+        search_res = execute_with_retry(search_req)
+
+        page_items = search_res.get("items", [])
+        items.extend(page_items)
+
+        page_token = search_res.get("nextPageToken")
+        if not page_token or not page_items:
+            break
+
     if not items:
         return []
 
     video_ids = [item["id"]["videoId"] for item in items]
-    channel_ids = [item["snippet"]["channelId"] for item in items]
+    channel_ids = list(set(item["snippet"]["channelId"] for item in items))
 
-    # 2. Detalles de vídeos (visitas y duración)
-    v_req = youtube.videos().list(
-        part="statistics,contentDetails", id=",".join(video_ids)
-    )
-    v_res = execute_with_retry(v_req)
-
+    # 2. Detalles de vídeos (visitas y duración), en lotes de 50 IDs
+    # (límite máximo permitido por la API en una sola llamada)
     video_details = {}
-    for v_item in v_res.get("items", []):
-        v_id = v_item["id"]
-        v_views = int(v_item["statistics"].get("viewCount", 0))
-        v_duration_raw = v_item.get("contentDetails", {}).get(
-            "duration", "PT0S"
+    for id_batch in chunk_list(video_ids, 50):
+        v_req = youtube.videos().list(
+            part="statistics,contentDetails", id=",".join(id_batch)
         )
-        v_seconds = parse_duration_to_seconds(v_duration_raw)
+        v_res = execute_with_retry(v_req)
 
-        video_details[v_id] = {"views": v_views, "seconds": v_seconds}
+        for v_item in v_res.get("items", []):
+            v_id = v_item["id"]
+            v_views = int(v_item["statistics"].get("viewCount", 0))
+            v_duration_raw = v_item.get("contentDetails", {}).get(
+                "duration", "PT0S"
+            )
+            v_seconds = parse_duration_to_seconds(v_duration_raw)
 
-    # 3. Detalles de canales (suscriptores)
-    c_req = youtube.channels().list(
-        part="statistics", id=",".join(set(channel_ids))
-    )
-    c_res = execute_with_retry(c_req)
+            video_details[v_id] = {"views": v_views, "seconds": v_seconds}
 
-    subs_map = {
-        c_item["id"]: int(c_item["statistics"].get("subscriberCount", 0))
-        for c_item in c_res.get("items", [])
-    }
+    # 3. Detalles de canales (suscriptores), también en lotes de 50 IDs
+    subs_map = {}
+    for id_batch in chunk_list(channel_ids, 50):
+        c_req = youtube.channels().list(
+            part="statistics", id=",".join(id_batch)
+        )
+        c_res = execute_with_retry(c_req)
+
+        subs_map.update(
+            {
+                c_item["id"]: int(c_item["statistics"].get("subscriberCount", 0))
+                for c_item in c_res.get("items", [])
+            }
+        )
 
     outliers = []
     for item in items:
@@ -375,8 +399,10 @@ with st.container(border=True):
     with col_slider:
         max_results = st.select_slider(
             "Muestreo de búsqueda",
-            options=[10, 20, 30, 40, 50],
-            value=50,
+            options=[10, 20, 30, 50, 100, 150, 200, 300, 500],
+            value=100,
+            help="Cantidad de vídeos a analizar. Valores altos consumen más cuota de la API "
+            "(cada bloque de 50 vídeos gasta ~100 unidades de cuota diaria).",
         )
     with col_min_views:
         min_views_input = st.number_input(
