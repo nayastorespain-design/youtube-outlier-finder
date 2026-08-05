@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
 import re
+import time
 import pandas as pd
 import streamlit as st
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
@@ -161,7 +163,7 @@ def parse_duration_to_seconds(duration_str):
     return hours * 3600 + minutes * 60 + seconds
 
 
-# --- CONSULTA A LA API (FILTRADO ANTI-SHORTS PRECISO) ---
+# --- CONSULTA A LA API (CON RESILIENCIA 503 Y FILTRADO PRECISO DE SHORTS) ---
 @st.cache_data(ttl=43200, show_spinner=False)
 def fetch_youtube_outliers(
     api_key, query, order, days_back, max_results, min_views=1000
@@ -172,20 +174,28 @@ def fetch_youtube_outliers(
         datetime.now(timezone.utc) - timedelta(days=days_back)
     ).isoformat()
 
-    # Petición a la API (buscamos cualquier duración y luego filtramos manualmente los <=60s)
-    search_res = (
-        youtube.search()
-        .list(
-            q=query,
-            part="snippet",
-            type="video",
-            videoDuration="any",
-            order=order,
-            publishedAfter=published_after,
-            maxResults=max_results,
-        )
-        .execute()
+    # Reintento automático en caso de parpadeos de servidor de Google (503, 500)
+    def execute_with_retry(request, max_retries=3):
+        for attempt in range(max_retries):
+            try:
+                return request.execute()
+            except HttpError as e:
+                if e.resp.status in [500, 502, 503, 504] and attempt < max_retries - 1:
+                    time.sleep(1.5 * (attempt + 1))
+                else:
+                    raise e
+
+    # 1. Búsqueda de vídeos
+    search_req = youtube.search().list(
+        q=query,
+        part="snippet",
+        type="video",
+        videoDuration="any",
+        order=order,
+        publishedAfter=published_after,
+        maxResults=max_results,
     )
+    search_res = execute_with_retry(search_req)
 
     items = search_res.get("items", [])
     if not items:
@@ -194,12 +204,11 @@ def fetch_youtube_outliers(
     video_ids = [item["id"]["videoId"] for item in items]
     channel_ids = [item["snippet"]["channelId"] for item in items]
 
-    # Obtenemos visitas y duración exacta del vídeo (contentDetails)
-    v_res = (
-        youtube.videos()
-        .list(part="statistics,contentDetails", id=",".join(video_ids))
-        .execute()
+    # 2. Detalles de vídeos (visitas y duración)
+    v_req = youtube.videos().list(
+        part="statistics,contentDetails", id=",".join(video_ids)
     )
+    v_res = execute_with_retry(v_req)
 
     video_details = {}
     for v_item in v_res.get("items", []):
@@ -212,12 +221,12 @@ def fetch_youtube_outliers(
 
         video_details[v_id] = {"views": v_views, "seconds": v_seconds}
 
-    # Obtenemos suscriptores de los canales
-    c_res = (
-        youtube.channels()
-        .list(part="statistics", id=",".join(set(channel_ids)))
-        .execute()
+    # 3. Detalles de canales (suscriptores)
+    c_req = youtube.channels().list(
+        part="statistics", id=",".join(set(channel_ids))
     )
+    c_res = execute_with_retry(c_req)
+
     subs_map = {
         c_item["id"]: int(c_item["statistics"].get("subscriberCount", 0))
         for c_item in c_res.get("items", [])
@@ -233,7 +242,7 @@ def fetch_youtube_outliers(
         duration_sec = v_info["seconds"]
         subs = subs_map.get(chan_id, 0)
 
-        # FILTRO DE SHORTS: Si dura 60 segundos o menos, lo ignoramos
+        # Filtro de Shorts (vídeos de 60 segundos o menos)
         if duration_sec <= 60:
             continue
 
@@ -249,7 +258,7 @@ def fetch_youtube_outliers(
             or thumbnails.get("default", {}).get("url", "")
         )
 
-        # Condición para ser un Outlier relevante
+        # Condición para Outliers válidos
         if views > subs and subs > 0 and views >= min_views:
             ratio = round(views / subs, 1)
             outliers.append(
