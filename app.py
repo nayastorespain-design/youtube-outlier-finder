@@ -164,7 +164,7 @@ def fetch_youtube_outliers(api_key, query, order, days_back, max_results):
     ).isoformat()
 
     # 1. Búsqueda excluyendo vídeos cortos (videoDuration='medium' filtra vídeos < 4 min)
-    # Valores válidos para videoDuration: 'any', 'long' (>20 min), 'medium' (4 a 20 min)
+    # Valores válidos para videoDuration: 'any', 'long' (>40 min), 'medium' (4 a 40 min)
     search_res = (
         youtube.search()
         .list(
