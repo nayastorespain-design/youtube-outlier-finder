@@ -1,292 +1,376 @@
+from datetime import datetime, timedelta, timezone
+import re
 import time
-import json
-import base64
-from datetime import datetime, timezone, timedelta
-import isodate
 import pandas as pd
 import streamlit as st
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-# ==========================================
-# ⚙️ PAGE CONFIGURATION & LAYOUT
-# ==========================================
+# --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="Apex Outliers | Enterprise SaaS",
+    page_title="Apex Outliers | YouTube Intelligence",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed",
 )
 
-# ==========================================
-# 🎨 CUSTOM SAAS / LINEAR-STYLE CSS
-# ==========================================
-st.markdown("""
-<style>
-    /* Dark / SaaS Linear Aesthetic */
-    :root {
-        --bg-color: #0d0f12;
-        --card-bg: #16191e;
-        --card-border: #262a33;
-        --accent-purple: #6366f1;
-        --accent-blue: #3b82f6;
-        --text-primary: #f3f4f6;
-        --text-secondary: #9ca3af;
-        --success-green: #10b981;
-        --warning-amber: #f59e0b;
+# --- ESTILOS CSS PREMIUM (GLASSMORPHISM & MODERN SAAS) ---
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* Streamlit Global Overrides */
+    /* Fondo principal */
     .stApp {
-        background-color: #0b0d10;
-        color: #e5e7eb;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-    
-    /* Sidebar Customization */
-    section[data-testid="stSidebar"] {
-        background-color: #111318 !important;
-        border-right: 1px solid #1f232b;
-    }
-    
-    /* Metric Cards & Outlier Containers */
-    .apex-card {
-        background-color: #161920;
-        border: 1px solid #242933;
-        border-radius: 10px;
-        padding: 16px;
-        margin-bottom: 20px;
-        transition: transform 0.2s ease, border-color 0.2s ease;
-    }
-    
-    .apex-card:hover {
-        border-color: #4f46e5;
-        transform: translateY(-2px);
+        background: radial-gradient(circle at 50% -20%, #1e1b4b 0%, #06080f 60%, #030407 100%);
+        color: #f1f5f9;
     }
 
-    .badge-ratio {
-        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-        color: #ffffff;
-        font-weight: 700;
-        font-size: 0.85rem;
-        padding: 4px 10px;
-        border-radius: 6px;
-        display: inline-block;
-    }
-
-    .badge-metrics {
-        color: #9ca3af;
-        font-size: 0.8rem;
-        font-weight: 500;
-    }
-
-    .stat-box {
-        background: #1a1d24;
-        border: 1px solid #2b303c;
-        border-radius: 8px;
-        padding: 12px 16px;
+    /* Header principal */
+    .app-header {
         text-align: center;
+        padding: 2.5rem 1rem 1.5rem 1rem;
     }
-    
-    .stat-val {
-        font-size: 1.4rem;
+    .app-title {
+        font-size: 3rem !important;
+        font-weight: 900 !important;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 50%, #6366f1 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+    }
+    .app-subtitle {
+        color: #94a3b8;
+        font-size: 1.1rem;
+        font-weight: 400;
+        max-width: 640px;
+        margin: 0 auto;
+        line-height: 1.5;
+    }
+    .app-badge {
+        display: inline-block;
+        background: rgba(99, 102, 241, 0.15);
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        color: #a5b4fc;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 0.8rem;
         font-weight: 700;
-        color: #f9fafb;
-    }
-    
-    .stat-lbl {
-        font-size: 0.75rem;
-        text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: #6b7280;
+        text-transform: uppercase;
+        margin-bottom: 12px;
     }
 
-    /* Form & Input Enhancements */
-    div[data-baseweb="input"] {
-        background-color: #191c23 !important;
-        border-color: #2a2f3d !important;
+    /* Contenedor del Panel de Control */
+    [data-testid="stForm"], [data-testid="stVerticalBlockBorderWrapper"] > div {
+        background: rgba(15, 23, 42, 0.65) !important;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(99, 102, 241, 0.18) !important;
+        border-radius: 16px !important;
+        padding: 24px !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    /* ETIQUETAS DE TEXTO EN BLANCO PURO */
+    [data-testid="stWidgetLabel"] p, label, .stSlider label {
         color: #ffffff !important;
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+        letter-spacing: 0.01em !important;
     }
-    
+
+    /* BOTÓN PRIMARIO ENTERPRISE */
     .stButton > button {
-        background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
-        color: white;
-        font-weight: 600;
-        border: none;
-        border-radius: 6px;
-        padding: 0.6rem 1.2rem;
-        transition: all 0.2s ease;
-    }
-    
-    .stButton > button:hover {
-        opacity: 0.95;
-        box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);
-    }
-    
-    /* High contrast text */
-    h1, h2, h3, h4 {
+        background-color: #4f46e5 !important;
         color: #ffffff !important;
         font-weight: 700 !important;
+        font-size: 1.05rem !important;
+        border: 1px solid #6366f1 !important;
+        border-radius: 8px !important;
+        padding: 14px 28px !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3) !important;
+        letter-spacing: 0.03em !important;
+        text-transform: uppercase !important;
     }
-</style>
-""", unsafe_allow_html=True)
+    .stButton > button:hover {
+        background-color: #4338ca !important;
+        border-color: #818cf8 !important;
+        box-shadow: 0 6px 20px rgba(79, 70, 229, 0.45) !important;
+        transform: translateY(-2px) !important;
+    }
+    .stButton > button:active {
+        transform: translateY(0) !important;
+        background-color: #3730a3 !important;
+    }
 
-# ==========================================
-# 🔑 API KEYS & POOL SETUP
-# ==========================================
-SYSTEM_API_KEYS = [
-    st.secrets.get("YOUTUBE_API_KEY_1", ""),
-    st.secrets.get("YOUTUBE_API_KEY_2", ""),
-    st.secrets.get("YOUTUBE_API_KEY_3", ""),
-    st.secrets.get("YOUTUBE_API_KEY_4", ""),
-    st.secrets.get("YOUTUBE_API_KEY_5", ""),
-]
+    /* Estilo específico para el botón de Exportar CSV */
+    .stDownloadButton > button {
+        background: rgba(30, 41, 59, 0.85) !important;
+        color: #a5b4fc !important;
+        border: 1px solid rgba(99, 102, 241, 0.4) !important;
+        font-weight: 700 !important;
+        border-radius: 8px !important;
+        padding: 10px 20px !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+        width: 100% !important;
+    }
+    .stDownloadButton > button:hover {
+        background: rgba(99, 102, 241, 0.25) !important;
+        color: #ffffff !important;
+        border-color: #6366f1 !important;
+        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4) !important;
+        transform: translateY(-1px) !important;
+    }
 
-# ==========================================
-# 🛠️ HELPER & PARSING FUNCTIONS
-# ==========================================
-def parse_duration_to_seconds(duration_raw: str) -> int:
-    """Parses ISO 8601 duration format into total seconds."""
-    try:
-        duration = isodate.parse_duration(duration_raw)
-        return int(duration.total_seconds())
-    except Exception:
+    /* Tarjetas de Outliers */
+    .outlier-card {
+        background: rgba(15, 23, 42, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(99, 102, 241, 0.15);
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 18px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    }
+    .outlier-card:hover {
+        border-color: rgba(99, 102, 241, 0.45);
+        transform: translateY(-3px);
+        box-shadow: 0 12px 32px rgba(99, 102, 241, 0.2);
+    }
+    .thumbnail-container {
+        position: relative;
+        overflow: hidden;
+        border-radius: 10px;
+        aspect-ratio: 16/9;
+    }
+    .thumbnail-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        transition: transform 0.3s ease;
+    }
+    .outlier-card:hover .thumbnail-img {
+        transform: scale(1.05);
+    }
+
+    .outlier-title {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #f8fafc !important;
+        text-decoration: none;
+        line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        transition: color 0.2s ease;
+    }
+    .outlier-title:hover {
+        color: #a5b4fc !important;
+    }
+
+    .outlier-meta {
+        color: #94a3b8;
+        font-size: 0.85rem;
+        margin-top: 8px;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        font-weight: 500;
+    }
+    
+    /* Badge Outlier Ratio */
+    .badge-outlier {
+        background: rgba(244, 63, 94, 0.12);
+        color: #fb7185;
+        border: 1px solid rgba(244, 63, 94, 0.35);
+        font-weight: 800;
+        padding: 8px 18px;
+        border-radius: 20px;
+        font-size: 1.05rem;
+        display: inline-block;
+        text-align: center;
+        box-shadow: 0 0 15px rgba(244, 63, 94, 0.15);
+    }
+
+    /* Caja de métricas */
+    .metric-container {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 14px;
+    }
+    .metric-box {
+        background: rgba(6, 8, 15, 0.6);
+        border-radius: 8px;
+        padding: 10px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .metric-label {
+        font-size: 0.68rem;
+        color: #64748b;
+        text-transform: uppercase;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+    }
+    .metric-value {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #f1f5f9;
+        margin-top: 2px;
+    }
+
+    /* Botón YouTube */
+    .btn-yt {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(30, 41, 59, 0.8);
+        color: #f1f5f9 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 10px 18px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.88rem;
+        transition: all 0.2s ease;
+        width: 100%;
+        text-align: center;
+    }
+    .btn-yt:hover {
+        background-color: #FF0000;
+        color: #FFFFFF !important;
+        border-color: #FF0000;
+        box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3);
+    }
+
+    /* Ocultar elementos innecesarios de Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Clave API desde Secrets
+YOUTUBE_API_KEY = st.secrets.get("YOUTUBE_API_KEY")
+
+
+# Helper para convertir la duración en formato ISO 8601 a segundos
+def parse_duration_to_seconds(duration_str):
+    match = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration_str)
+    if not match:
         return 0
+    hours = int(match.group(1) or 0)
+    minutes = int(match.group(2) or 0)
+    seconds = int(match.group(3) or 0)
+    return hours * 3600 + minutes * 60 + seconds
 
-def format_number(num: int) -> str:
-    """Formats large numbers into readable K/M strings."""
-    if num >= 1_000_000:
-        return f"{num / 1_000_000:.1f}M"
-    elif num >= 1_000:
-        return f"{num / 1_000:.1f}K"
-    return str(num)
 
-def is_quota_error(error: Exception) -> bool:
-    """Determines whether an exception is caused by YouTube Data API quota exhaustion."""
-    if isinstance(error, HttpError):
-        if error.resp.status in [403, 429]:
-            err_str = str(error).lower()
-            if "quotaexceeded" in err_str or "ratelimitexceeded" in err_str or "keyinvalid" not in err_str:
-                return True
-    return False
-
-# ==========================================
-# 🔄 CORE ENGINE: ROTATING BACKEND SEARCH
-# ==========================================
-@st.cache_data(ttl=3600*6, show_spinner=False)
+# --- CONSULTA A LA API (CON RESILIENCIA 503, PAGINACIÓN Y FILTRADO PRECISO DE SHORTS) ---
+@st.cache_data(ttl=43200, show_spinner=False)
 def fetch_youtube_outliers(
-    keys_pool: list,
-    query: str,
-    order: str,
-    days_back: int,
-    min_views: int = 1000,
-    min_ratio: float = 1.0,
-    max_pages: int = 5,
-    min_duration_sec: int = 60
+    api_key, query, order, days_back, max_results, min_views=1000
 ):
-    """
-    Executes a multi-page deep scan for YouTube video outliers.
-    Includes failover key rotation upon hitting quota limits.
-    """
-    valid_keys = [k.strip() for k in keys_pool if k and k.strip()]
-    if not valid_keys:
-        raise ValueError("No API Keys configured. Please supply a valid Google API Key.")
+    youtube = build("youtube", "v3", developerKey=api_key)
 
-    current_key_idx = 0
+    published_after = (
+        datetime.now(timezone.utc) - timedelta(days=days_back)
+    ).isoformat()
 
-    def get_service():
-        nonlocal current_key_idx
-        return build("youtube", "v3", developerKey=valid_keys[current_key_idx])
-
-    def execute_with_failover(request_builder_fn):
-        nonlocal current_key_idx
-        while current_key_idx < len(valid_keys):
+    def execute_with_retry(request, max_retries=3):
+        for attempt in range(max_retries):
             try:
-                service = get_service()
-                req = request_builder_fn(service)
-                return req.execute()
-            except Exception as e:
-                if is_quota_error(e):
-                    current_key_idx += 1
-                    if current_key_idx >= len(valid_keys):
-                        raise RuntimeError("❌ All available API keys have exhausted their daily quota.")
-                    st.toast(f"🔄 Quota reached on Key #{current_key_idx}. Rotating to Key #{current_key_idx+1}...", icon="⚡")
+                return request.execute()
+            except HttpError as e:
+                if (
+                    e.resp.status in [500, 502, 503, 504]
+                    and attempt < max_retries - 1
+                ):
+                    time.sleep(1.5 * (attempt + 1))
                 else:
                     raise e
 
-    published_after = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat()
+    def chunk_list(data, size=50):
+        for i in range(0, len(data), size):
+            yield data[i : i + size]
 
-    def chunk_list(lst, size=50):
-        for i in range(0, len(lst), size):
-            yield lst[i : i + size]
-
-    all_raw_items = []
+    items = []
     page_token = None
-    page_count = 0
+    while len(items) < max_results:
+        remaining = max_results - len(items)
+        search_req = youtube.search().list(
+            q=query,
+            part="snippet",
+            type="video",
+            videoDuration="any",
+            order=order,
+            publishedAfter=published_after,
+            maxResults=min(50, remaining),
+            pageToken=page_token,
+        )
+        search_res = execute_with_retry(search_req)
 
-    # Step 1: Paginated Search Scanning
-    while True:
-        def build_search_req(service):
-            return service.search().list(
-                q=query,
-                part="snippet",
-                type="video",
-                videoDuration="any",
-                order=order,
-                publishedAfter=published_after,
-                maxResults=50,
-                pageToken=page_token
-            )
+        page_items = search_res.get("items", [])
+        items.extend(page_items)
 
-        search_res = execute_with_failover(build_search_req)
-        items = search_res.get("items", [])
-        if not items:
-            break
-
-        all_raw_items.extend(items)
         page_token = search_res.get("nextPageToken")
-        page_count += 1
-
-        if not page_token or page_count >= max_pages:
+        if not page_token or not page_items:
             break
 
-    if not all_raw_items:
+    if not items:
         return []
 
-    video_ids = [item["id"]["videoId"] for item in all_raw_items if "id" in item and "videoId" in item["id"]]
-    channel_ids = list(set(item["snippet"]["channelId"] for item in all_raw_items if "snippet" in item))
+    video_ids = [item["id"]["videoId"] for item in items]
+    channel_ids = list(set(item["snippet"]["channelId"] for item in items))
 
-    # Step 2: Batch Fetch Video Metadata & Statistics (up to 50 per batch)
     video_details = {}
     for id_batch in chunk_list(video_ids, 50):
-        def build_video_req(service):
-            return service.videos().list(
-                part="statistics,contentDetails",
-                id=",".join(id_batch)
-            )
-        v_res = execute_with_failover(build_video_req)
+        v_req = youtube.videos().list(
+            part="statistics,contentDetails", id=",".join(id_batch)
+        )
+        v_res = execute_with_retry(v_req)
+
         for v_item in v_res.get("items", []):
             v_id = v_item["id"]
-            views = int(v_item["statistics"].get("viewCount", 0))
-            duration_raw = v_item.get("contentDetails", {}).get("duration", "PT0S")
-            seconds = parse_duration_to_seconds(duration_raw)
-            video_details[v_id] = {"views": views, "seconds": seconds}
+            v_views = int(v_item["statistics"].get("viewCount", 0))
+            v_duration_raw = v_item.get("contentDetails", {}).get(
+                "duration", "PT0S"
+            )
+            v_seconds = parse_duration_to_seconds(v_duration_raw)
 
-    # Step 3: Batch Fetch Channel Statistics
+            video_details[v_id] = {"views": v_views, "seconds": v_seconds}
+
     subs_map = {}
     for id_batch in chunk_list(channel_ids, 50):
-        def build_channel_req(service):
-            return service.channels().list(
-                part="statistics",
-                id=",".join(id_batch)
-            )
-        c_res = execute_with_failover(build_channel_req)
-        for c_item in c_res.get("items", []):
-            subs_map[c_item["id"]] = int(c_item["statistics"].get("subscriberCount", 0))
+        c_req = youtube.channels().list(
+            part="statistics", id=",".join(id_batch)
+        )
+        c_res = execute_with_retry(c_req)
 
-    # Step 4: Process Outliers
+        subs_map.update(
+            {
+                c_item["id"]: int(
+                    c_item["statistics"].get("subscriberCount", 0)
+                )
+                for c_item in c_res.get("items", [])
+            }
+        )
+
     outliers = []
-    for item in all_raw_items:
+    for item in items:
         vid_id = item["id"]["videoId"]
         chan_id = item["snippet"]["channelId"]
 
@@ -295,25 +379,26 @@ def fetch_youtube_outliers(
         duration_sec = v_info["seconds"]
         subs = subs_map.get(chan_id, 0)
 
-        # Exclude Shorts if configured
-        if duration_sec <= min_duration_sec:
+        # Anti-Shorts (Duración superior a 60s)
+        if duration_sec <= 60:
             continue
 
-        if subs > 0 and views >= min_views:
-            ratio_val = views / subs
-            if ratio_val >= min_ratio:
-                pub_raw = item["snippet"]["publishedAt"]
-                pub_date = datetime.fromisoformat(pub_raw.replace("Z", "+00:00")).strftime("%b %d, %Y")
+        pub_raw = item["snippet"]["publishedAt"]
+        pub_date = datetime.fromisoformat(
+            pub_raw.replace("Z", "+00:00")
+        ).strftime("%d %b %Y")
 
-                thumbnails = item["snippet"].get("thumbnails", {})
-                thumb_url = (
-                    thumbnails.get("high", {}).get("url") or
-                    thumbnails.get("medium", {}).get("url") or
-                    thumbnails.get("default", {}).get("url", "")
-                )
+        thumbnails = item["snippet"].get("thumbnails", {})
+        thumb_url = (
+            thumbnails.get("high", {}).get("url")
+            or thumbnails.get("medium", {}).get("url")
+            or thumbnails.get("default", {}).get("url", "")
+        )
 
-                outliers.append({
-                    "id": vid_id,
+        if views > subs and subs > 0 and views >= min_views:
+            ratio = round(views / subs, 1)
+            outliers.append(
+                {
                     "titulo": item["snippet"]["title"],
                     "canal": item["snippet"]["channelTitle"],
                     "fecha": pub_date,
@@ -322,178 +407,229 @@ def fetch_youtube_outliers(
                     "suscriptores_num": subs,
                     "visitas": f"{views:,}",
                     "suscriptores": f"{subs:,}",
-                    "duracion_sec": duration_sec,
-                    "duracion_min": f"{duration_sec // 60}m {duration_sec % 60}s",
-                    "ratio_num": round(ratio_val, 2),
-                    "ratio": f"{round(ratio_val, 2)}x",
+                    "ratio": f"{ratio}x",
                     "url": f"https://www.youtube.com/watch?v={vid_id}",
-                    "channel_url": f"https://www.youtube.com/channel/{chan_id}"
-                })
-
-    outliers.sort(key=lambda x: x["ratio_num"], reverse=True)
-    return outliers
-
-# ==========================================
-# 🖥️ APPLICATION HEADER & SIDEBAR
-# ==========================================
-st.markdown("<h1>⚡ Apex Outliers <span style='font-size:0.5em; color:#6366f1; vertical-align:middle;'>Enterprise</span></h1>", unsafe_allow_html=True)
-st.caption("Advanced YouTube Outlier Detection Engine & Content Opportunity Analyzer")
-
-st.sidebar.markdown("### 🔑 API Key Management")
-
-tier = st.sidebar.radio("Subscription Tier:", ["Enterprise Pool", "Pro Custom Key"], index=1)
-user_key = ""
-
-if tier == "Pro Custom Key":
-    user_key = st.sidebar.text_input(
-        "Enter your YouTube API Key:",
-        type="password",
-        help="Use your private Google Cloud API key for unshared quota allocation."
-    )
-    if user_key:
-        st.sidebar.success("Custom Key Active (Primary Priority)")
-
-# Assemble Keys Pool based on hierarchy
-if user_key.strip():
-    active_keys_pool = [user_key.strip()] + [k for k in SYSTEM_API_KEYS if k]
-else:
-    active_keys_pool = [k for k in SYSTEM_API_KEYS if k]
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🎛️ Search Parameters")
-
-query_input = st.sidebar.text_input("Niche / Keyword:", value="home automation setup")
-order_input = st.sidebar.selectbox("Sort Search By:", ["relevance", "date", "viewCount"], index=0)
-days_input = st.sidebar.slider("Uploaded within (Days):", 7, 365, 90)
-
-st.sidebar.markdown("### 🎯 Outlier Filters")
-min_views_input = st.sidebar.number_input("Minimum Views:", value=2000, step=1000)
-min_ratio_input = st.sidebar.slider("Min Outlier Ratio (Views/Subs):", 0.5, 20.0, 1.5, step=0.1)
-max_pages_input = st.sidebar.slider("Deep Scan Depth (Pages):", 1, 15, 6, help="Each page fetches 50 raw video results.")
-exclude_shorts = st.sidebar.checkbox("Exclude YouTube Shorts (<=60s)", value=True)
-
-# ==========================================
-# 🚀 EXECUTION & RESULTS PRESENTATION
-# ==========================================
-min_duration = 60 if exclude_shorts else 0
-
-if st.sidebar.button("🔎 Run Outlier Analysis", type="primary", use_container_width=True):
-    if not active_keys_pool:
-        st.error("No API Keys configured. Please supply an API key in the sidebar.")
-    else:
-        with st.spinner(f"Scanning up to {max_pages_input * 50} YouTube videos for high-performing outliers..."):
-            try:
-                data = fetch_youtube_outliers(
-                    keys_pool=active_keys_pool,
-                    query=query_input,
-                    order=order_input,
-                    days_back=days_input,
-                    min_views=min_views_input,
-                    min_ratio=min_ratio_input,
-                    max_pages=max_pages_input,
-                    min_duration_sec=min_duration
-                )
-                
-                st.session_state["outlier_data"] = data
-                st.session_state["search_performed"] = True
-            except Exception as e:
-                st.error(f"Analysis Error: {e}")
-
-if st.session_state.get("search_performed", False):
-    data = st.session_state.get("outlier_data", [])
-    
-    if data:
-        df = pd.DataFrame(data)
-        
-        # Stat KPI Summary Header
-        st.markdown("---")
-        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-        
-        with kpi1:
-            st.markdown(f"<div class='stat-box'><div class='stat-val'>{len(data)}</div><div class='stat-lbl'>Outliers Found</div></div>", unsafe_allow_html=True)
-        with kpi2:
-            max_ratio = df["ratio_num"].max()
-            st.markdown(f"<div class='stat-box'><div class='stat-val'>{max_ratio}x</div><div class='stat-lbl'>Peak Outlier Ratio</div></div>", unsafe_allow_html=True)
-        with kpi3:
-            avg_views = format_number(int(df["visitas_num"].mean()))
-            st.markdown(f"<div class='stat-box'><div class='stat-val'>{avg_views}</div><div class='stat-lbl'>Avg Outlier Views</div></div>", unsafe_allow_html=True)
-        with kpi4:
-            avg_subs = format_number(int(df["suscriptores_num"].mean()))
-            st.markdown(f"<div class='stat-box'><div class='stat-val'>{avg_subs}</div><div class='stat-lbl'>Avg Channel Subs</div></div>", unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Tabs for Layout (Grid View vs Data Table View vs Export)
-        tab_grid, tab_table, tab_export = st.tabs(["🖼️ Visual Cards", "📊 Analytics Table", "📥 Export Data"])
-        
-        with tab_grid:
-            cols_per_row = 3
-            for i in range(0, len(data), cols_per_row):
-                cols = st.columns(cols_per_row)
-                for j, col in enumerate(cols):
-                    if i + j < len(data):
-                        item = data[i + j]
-                        with col:
-                            st.markdown(f"""
-                            <div class="apex-card">
-                                <img src="{item['thumbnail']}" style="width:100%; border-radius:6px; margin-bottom:12px;">
-                                <div class="badge-ratio" style="margin-bottom:8px;">🔥 Outlier Ratio: {item['ratio']}</div>
-                                <h4 style="font-size:1rem; margin-top:4px; margin-bottom:8px; line-height:1.3;"><a href="{item['url']}" target="_blank" style="color:#ffffff; text-decoration:none;">{item['titulo']}</a></h4>
-                                <div class="badge-metrics">
-                                    📺 <b><a href="{item['channel_url']}" target="_blank" style="color:#9ca3af;">{item['canal']}</a></b><br>
-                                    👁️ <b>Visitas:</b> {item['visitas']} &nbsp;|&nbsp; 👥 <b>Subs:</b> {item['suscriptores']}<br>
-                                    ⏱️ <b>Duración:</b> {item['duracion_min']} &nbsp;|&nbsp; 📅 <b>Publicado:</b> {item['fecha']}
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-
-        with tab_table:
-            st.markdown("#### High-Contrast Outlier Dataset")
-            display_df = df[["titulo", "canal", "ratio", "visitas", "suscriptores", "duracion_min", "fecha", "url"]].copy()
-            display_df.columns = ["Title", "Channel", "Outlier Ratio", "Views", "Subscribers", "Duration", "Published Date", "Video URL"]
-            st.dataframe(
-                display_df,
-                use_container_width=True,
-                column_config={
-                    "Video URL": st.column_config.LinkColumn("Watch Video"),
                 }
             )
 
-        with tab_export:
-            st.markdown("#### Export Outlier Data")
-            st.write("Download the complete analysis dataset for offline evaluation or spreadsheet integration.")
-            
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                csv_bytes = df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="📄 Download CSV Report",
-                    data=csv_bytes,
-                    file_name=f"apex_outliers_{query_input.replace(' ', '_')}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-            with c2:
-                json_bytes = df.to_json(orient="records", indent=2).encode('utf-8')
-                st.download_button(
-                    label="🌐 Download JSON Dataset",
-                    data=json_bytes,
-                    file_name=f"apex_outliers_{query_input.replace(' ', '_')}.json",
-                    mime="application/json",
-                    use_container_width=True
-                )
-            with c3:
-                excel_df = df.drop(columns=["thumbnail"])
-                output = pd.ExcelWriter("outliers_report.xlsx", engine='openpyxl')
-                excel_df.to_excel(output, index=False, sheet_name='Outliers')
-                output.close()
-                with open("outliers_report.xlsx", "rb") as f:
-                    st.download_button(
-                        label="📊 Download Excel Sheet",
-                        data=f.read(),
-                        file_name=f"apex_outliers_{query_input.replace(' ', '_')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
+    return outliers
+
+
+# --- RENDERIZADO DE RESULTADOS ---
+def render_outliers(outliers):
+    for item in outliers:
+        st.markdown(
+            f"""
+            <div class="outlier-card">
+                <div style="display: grid; grid-template-columns: 240px 1fr 180px; gap: 20px; align-items: center;">
+                    <!-- Columna 1: Thumbnail -->
+                    <div class="thumbnail-container">
+                        <a href="{item['url']}" target="_blank">
+                            <img src="{item['thumbnail']}" class="thumbnail-img" alt="Thumbnail">
+                        </a>
+                    </div>
+                    <!-- Columna 2: Info Principal -->
+                    <div>
+                        <a href="{item['url']}" target="_blank" class="outlier-title">{item['titulo']}</a>
+                        <div class="outlier-meta">
+                            <span>📺 {item['canal']}</span>
+                            <span>📅 {item['fecha']}</span>
+                        </div>
+                        <div class="metric-container">
+                            <div class="metric-box">
+                                <div class="metric-label">Visitas</div>
+                                <div class="metric-value">{item['visitas']}</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-label">Suscriptores</div>
+                                <div class="metric-value">{item['suscriptores']}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Columna 3: Ratio y Acción -->
+                    <div style="display: flex; flex-direction: column; gap: 14px; align-items: stretch; text-align: center;">
+                        <div>
+                            <span class="badge-outlier">🔥 {item['ratio']}</span>
+                        </div>
+                        <a href="{item['url']}" target="_blank" class="btn-yt">▶ Ver en YouTube</a>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+# --- HEADER ---
+st.markdown(
+    """
+    <div class="app-header">
+        <div class="app-badge">⚡ YOUTUBE INTELLIGENCE</div>
+        <div class="app-title">Apex Outliers</div>
+        <div class="app-subtitle">Localiza vídeos de alto rendimiento que superan exponencialmente la audiencia base de sus canales.</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# --- PANEL DE CONTROL ---
+with st.container():
+    col_q, col_s, col_t = st.columns([2.5, 1, 1])
+
+    with col_q:
+        query = st.text_input(
+            "Palabra clave o Nicho",
+            placeholder="Ej. huerto urbano, riego tomate, finanzas...",
+        )
+
+    with col_s:
+        sort_option = st.selectbox(
+            "Ordenar por",
+            options=["Relevancia", "Más reproducidos", "Más recientes"],
+        )
+
+    with col_t:
+        time_option = st.selectbox(
+            "Antigüedad máxima",
+            options=[
+                "Último mes",
+                "Últimos 3 meses",
+                "Últimos 6 meses",
+                "Último año",
+            ],
+            index=3,
+        )
+
+    col_slider, col_min_views = st.columns([2, 1])
+    with col_slider:
+        max_results = st.select_slider(
+            "Muestreo de búsqueda",
+            options=[10, 20, 30, 50, 100, 150, 200, 300, 500],
+            value=100,
+            help="Cantidad de vídeos a analizar. Valores altos consumen más cuota de la API.",
+        )
+    with col_min_views:
+        min_views_input = st.number_input(
+            "Mínimo de visitas",
+            min_value=100,
+            value=1000,
+            step=500,
+            help="Filtra vídeos irrelevantes de canales recién creados.",
+        )
+
+    btn_search = st.button(
+        "EJECUTAR ANÁLISIS DE OUTLIERS", type="primary", use_container_width=True
+    )
+
+sort_mapping = {
+    "Relevancia": "relevance",
+    "Más reproducidos": "viewCount",
+    "Más recientes": "date",
+}
+
+time_mapping = {
+    "Último mes": 30,
+    "Últimos 3 meses": 90,
+    "Últimos 6 meses": 180,
+    "Último año": 365,
+}
+
+# --- EJECUCIÓN DE BÚSQUEDA ---
+if btn_search:
+    if not YOUTUBE_API_KEY:
+        st.error(
+            "⚠️ Configura YOUTUBE_API_KEY en los Secrets de Streamlit Cloud."
+        )
+    elif not query:
+        st.warning("⚠️ Introduce una palabra clave.")
     else:
-        st.info("No videos matched all specified outlier criteria. Try lowering the ratio threshold or expanding the publication timeframe.")
+        with st.spinner("Analizando métricas del canal y vídeos..."):
+            try:
+                days_back = time_mapping[time_option]
+                outliers = fetch_youtube_outliers(
+                    YOUTUBE_API_KEY,
+                    query,
+                    sort_mapping[sort_option],
+                    days_back,
+                    max_results,
+                    min_views=min_views_input,
+                )
+
+                if outliers:
+                    st.session_state["outliers_data"] = outliers
+                    st.session_state["search_query"] = query
+                else:
+                    st.session_state.pop("outliers_data", None)
+                    st.info(
+                        "No se encontraron outliers con los filtros actuales."
+                    )
+
+            except Exception as e:
+                st.error(f"Error en la consulta: {e}")
+
+# --- MOSTRAR RESULTADOS Y EXPORTACIÓN ---
+if "outliers_data" in st.session_state:
+    outliers = st.session_state["outliers_data"]
+
+    if outliers and len(outliers) > 0:
+        st.markdown("<br>", unsafe_allow_html=True)
+        col_info, col_export = st.columns([3, 1], vertical_alignment="center")
+
+        with col_info:
+            st.markdown(f"### ⚡ {len(outliers)} Outliers detectados")
+
+        with col_export:
+            df_export = pd.DataFrame(outliers)
+
+            column_mapping = {
+                "titulo": "Título",
+                "canal": "Canal",
+                "fecha": "Fecha Publicación",
+                "visitas_num": "Visitas",
+                "suscriptores_num": "Suscriptores",
+                "ratio": "Multiplicador",
+                "url": "Enlace",
+                "thumbnail": "URL Miniatura",
+            }
+
+            valid_cols = [
+                col for col in column_mapping.keys() if col in df_export.columns
+            ]
+            df_csv = df_export[valid_cols].rename(columns=column_mapping)
+
+            # Usamos utf-8-sig para compatibilidad total con acentos en Excel
+            csv_data = df_csv.to_csv(index=False).encode("utf-8-sig")
+
+            clean_query = (
+                "".join(
+                    c
+                    for c in st.session_state.get("search_query", "outliers")
+                    if c.isalnum() or c in (" ", "_")
+                )
+                .strip()
+                .replace(" ", "_")
+            )
+
+            st.download_button(
+                label="📥 Exportar CSV",
+                data=csv_data,
+                file_name=f"outliers_{clean_query}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="btn_download_csv",
+            )
+
+        render_outliers(outliers)
+
+# --- FOOTER ---
+st.markdown(
+    """
+    <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.1); margin-top: 50px;">
+    <div style="text-align: center; font-size: 12px; color: #94a3b8; padding-bottom: 20px;">
+        Apex Outliers • Powered by YouTube Data API v3<br>
+        <a href="https://www.youtube.com/t/terms" target="_blank" style="color: #818cf8; text-decoration: none;">Términos de YouTube</a> | 
+        <a href="http://www.google.com/policies/privacy" target="_blank" style="color: #818cf8; text-decoration: none;">Política de Privacidad</a>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
