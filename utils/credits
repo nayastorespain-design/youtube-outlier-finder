@@ -1,0 +1,48 @@
+from datetime import date
+import streamlit as st
+
+CREDITS_FREE_DAILY = 2  # Límite de búsquedas diarias gratis
+
+
+def check_and_update_credits(supabase, email: str, current_plan: str):
+    """Verifica si al usuario le quedan créditos diarios o si debe reiniciarlos."""
+    if current_plan == "pro":
+        return True, "Ilimitado"
+
+    if not email:
+        return False, 0
+
+    res = (
+        supabase.table("profiles")
+        .select("credits, last_reset")
+        .eq("email", email)
+        .execute()
+    )
+
+    if not res.data:
+        return False, 0
+
+    user_data = res.data[0]
+    credits = user_data.get("credits", CREDITS_FREE_DAILY)
+    last_reset_str = user_data.get("last_reset")
+    today = date.today()
+
+    # Si es un nuevo día, reiniciamos a 2 créditos
+    if last_reset_str != str(today):
+        credits = CREDITS_FREE_DAILY
+        supabase.table("profiles").update(
+            {"credits": credits, "last_reset": str(today)}
+        ).eq("email", email).execute()
+
+    if credits > 0:
+        return True, credits
+    else:
+        return False, 0
+
+
+def consume_credit(supabase, email: str, current_credits: int):
+    """Resta 1 crédito en Supabase tras ejecutar una búsqueda con éxito."""
+    new_credits = max(0, current_credits - 1)
+    supabase.table("profiles").update({"credits": new_credits}).eq(
+        "email", email
+    ).execute()
