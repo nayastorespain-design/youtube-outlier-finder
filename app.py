@@ -1,18 +1,49 @@
-from datetime import datetime, timedelta, timezone
 import re
 import time
+from datetime import datetime, timedelta, timezone
+
 import pandas as pd
 import streamlit as st
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from supabase import Client, create_client
 
-# --- CONFIGURACIÓN DE PÁGINA ---
+# --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="Apex Outliers | YouTube Intelligence",
+    page_title="U Smart Search",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# --- 2. CONEXIÓN CON SUPABASE ---
+SUPABASE_URL = st.secrets["supabase"]["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["supabase"]["SUPABASE_KEY"]
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# --- 3. FUNCIONES DE SUPABASE (CACHÉ Y PLANES) ---
+def get_cached_search(query: str):
+    """Busca si los resultados de YouTube ya están guardados en Supabase."""
+    query_clean = query.strip().lower()
+    res = supabase.table("search_cache").select("results_json").eq("query_text", query_clean).execute()
+    if res.data:
+        return res.data[0]["results_json"]
+    return None
+
+def save_search_to_cache(query: str, results: list):
+    """Guarda los resultados de una nueva búsqueda de YouTube en Supabase."""
+    query_clean = query.strip().lower()
+    supabase.table("search_cache").upsert({
+        "query_text": query_clean,
+        "results_json": results
+    }).execute()
+
+def get_user_plan(user_id: str) -> str:
+    """Devuelve 'free' o 'pro' según el estado del usuario en la base de datos."""
+    res = supabase.table("profiles").select("plan").eq("id", user_id).execute()
+    if res.data:
+        return res.data[0]["plan"]
+    return "free"
 
 # --- CONFIGURACIÓN DE PAGO ---
 PAYMENT_URL = "https://tu-pagina-de-pago.com"  # Reemplazar con tu enlace de pago
@@ -287,41 +318,43 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- GESTIÓN Y OBTENCIÓN DE API KEYS (CON ROTACIÓN) ---
-def get_configured_keys():
-    """Recupera la lista de claves desde secrets, admitiendo tanto listas como strings simples."""
-    keys = st.secrets.get("YOUTUBE_API_KEYS", st.secrets.get("YOUTUBE_API_KEY", []))
-    if isinstance(keys, str):
-        return [keys]
-    return list(keys)
-
-server_keys = get_configured_keys()
-
+# --- 4. GESTIÓN DE BARRA LATERAL ---
 st.sidebar.title("⚙️ Configuración")
-
-# Opción para clave personalizada del usuario
-custom_key = st.sidebar.text_input(
+user_api_keys_input = st.sidebar.text_area(
     "Tu API Key personal (Opcional)",
     type="password",
-    help="Puedes introducir tu propia clave si lo prefieres.",
+    help="Puedes introducir varias claves separadas por comas o saltos de línea para rotar en caso de agotar la cuota.",
 )
 
-# Estado de la clave activa
-if custom_key.strip():
-    ACTIVE_KEYS = [custom_key.strip()]
-    st.sidebar.success("🔑 Usando tu API Key personalizada.")
-elif server_keys:
-    ACTIVE_KEYS = server_keys
-    st.sidebar.info(f"🌐 Usando API Server limitada.")
+def parse_api_keys(input_val):
+    if not input_val:
+        return []
+    if isinstance(input_val, list):
+        return [str(k).strip() for k in input_val if str(k).strip()]
+    keys = re.split(r"[\n,\s]+", str(input_val).strip())
+    return [k.strip() for k in keys if k.strip()]
+
+user_keys = parse_api_keys(user_api_keys_input)
+
+# Obtener claves desde secretos (soporta sección [youtube] o raíz)
+youtube_secrets = st.secrets.get("youtube", {})
+if isinstance(youtube_secrets, dict) and "YOUTUBE_API_KEYS" in youtube_secrets:
+    server_keys_raw = youtube_secrets["YOUTUBE_API_KEYS"]
 else:
-    ACTIVE_KEYS = []
-    st.sidebar.warning("⚠️ No hay API Keys configuradas.")
+    server_keys_raw = st.secrets.get("YOUTUBE_API_KEYS", [])
+
+server_keys = parse_api_keys(server_keys_raw)
+
+# Lista final priorizando las introducidas por el usuario
+ACTIVE_API_KEYS = user_keys if user_keys else server_keys
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(
     """
-### 💡 ¿Cómo funciona la cuota?
-Cada API Key dispone de 10,000 unidades diarias gratuitas de Google. El sistema rotará automáticamente entre tus claves si alguna agota su cuota diaria.
+### 💡 ¿Cómo obtener tu propia API Key?
+1. Ve a [Google Cloud Console](https://console.cloud.google.com/).
+2. Crea un proyecto y activa la **YouTube Data API v3**.
+3. Genera una **API Key** en Credenciales y pégala aquí arriba.
 """
 )
 
@@ -335,169 +368,173 @@ def parse_duration_to_seconds(duration_str):
     return hours * 3600 + minutes * 60 + seconds
 
 
-# --- CONSULTA A LA API CON ROTACIÓN AUTOMÁTICA EN CASO DE ERROR ---
-@st.cache_data(ttl=43200, show_spinner=False)
+# --- 5. CONSULTA A YOUTUBE API CON CACHÉ DE SUPABASE Y ROTACIÓN DE CLAVES ---
 def fetch_youtube_outliers(
-    api_keys, query, order, days_back, max_results, min_views=1000
+    api_keys_tuple, query, order, days_back, max_results, min_views=1000
 ):
+    # Paso A: Intentar leer primero desde el Caché de Supabase
+    cached_data = get_cached_search(query)
+    if cached_data:
+        st.toast("⚡ Resultados cargados instantáneamente desde Caché (Supabase)", icon="🚀")
+        return cached_data
+
+    # Paso B: Si no está en Supabase, hacer la petición a la API de YouTube
+    api_keys = list(api_keys_tuple)
     if not api_keys:
-        raise ValueError("No hay API Keys disponibles.")
+        raise ValueError("No se proporcionó ninguna API Key válida.")
 
-    # Mantenemos un puntero de sesión para saber qué clave usar primero
-    if "key_index" not in st.session_state:
-        st.session_state["key_index"] = 0
+    key_index = 0
+    youtube = build("youtube", "v3", developerKey=api_keys[key_index])
 
-    total_keys = len(api_keys)
-    last_exception = None
+    published_after = (
+        datetime.now(timezone.utc) - timedelta(days=days_back)
+    ).isoformat()
 
-    # Bucle de reintento entre las diferentes claves configuradas
-    for attempt_idx in range(total_keys):
-        current_key_idx = (st.session_state["key_index"] + attempt_idx) % total_keys
-        active_key = api_keys[current_key_idx]
+    def execute_with_retry(request_builder_fn, max_retries=3):
+        nonlocal key_index, youtube
+        for attempt in range(max_retries):
+            try:
+                request = request_builder_fn(youtube)
+                return request.execute()
+            except HttpError as e:
+                if e.resp.status in [403, 429]:
+                    key_index += 1
+                    if key_index < len(api_keys):
+                        youtube = build("youtube", "v3", developerKey=api_keys[key_index])
+                        time.sleep(0.5)
+                        continue
+                    else:
+                        raise Exception("Se ha agotado la cuota de todas las API Keys disponibles.")
+                elif e.resp.status in [500, 502, 503, 504] and attempt < max_retries - 1:
+                    time.sleep(1.5 * (attempt + 1))
+                else:
+                    raise e
 
+    def chunk_list(data, size=50):
+        for i in range(0, len(data), size):
+            yield data[i : i + size]
+
+    items = []
+    page_token = None
+    while len(items) < max_results:
+        remaining = max_results - len(items)
+        
+        def build_search_req(yt_client):
+            return yt_client.search().list(
+                q=query,
+                part="snippet",
+                type="video",
+                videoDuration="any",
+                order=order,
+                publishedAfter=published_after,
+                maxResults=min(50, remaining),
+                pageToken=page_token,
+            )
+
+        search_res = execute_with_retry(build_search_req)
+        page_items = search_res.get("items", [])
+        items.extend(page_items)
+
+        page_token = search_res.get("nextPageToken")
+        if not page_token or not page_items:
+            break
+
+    if not items:
+        return []
+
+    video_ids = [item["id"]["videoId"] for item in items]
+    channel_ids = list(set(item["snippet"]["channelId"] for item in items))
+
+    video_details = {}
+    for id_batch in chunk_list(video_ids, 50):
+        batch_ids = ",".join(id_batch)
+        def build_video_req(yt_client):
+            return yt_client.videos().list(
+                part="statistics,contentDetails", id=batch_ids
+            )
+        v_res = execute_with_retry(build_video_req)
+
+        for v_item in v_res.get("items", []):
+            v_id = v_item["id"]
+            v_views = int(v_item["statistics"].get("viewCount", 0))
+            v_duration_raw = v_item.get("contentDetails", {}).get(
+                "duration", "PT0S"
+            )
+            v_seconds = parse_duration_to_seconds(v_duration_raw)
+
+            video_details[v_id] = {"views": v_views, "seconds": v_seconds}
+
+    subs_map = {}
+    for id_batch in chunk_list(channel_ids, 50):
+        batch_c_ids = ",".join(id_batch)
+        def build_channel_req(yt_client):
+            return yt_client.channels().list(
+                part="statistics", id=batch_c_ids
+            )
+        c_res = execute_with_retry(build_channel_req)
+
+        subs_map.update(
+            {
+                c_item["id"]: int(
+                    c_item["statistics"].get("subscriberCount", 0)
+                )
+                for c_item in c_res.get("items", [])
+            }
+        )
+
+    outliers = []
+    for item in items:
+        vid_id = item["id"]["videoId"]
+        chan_id = item["snippet"]["channelId"]
+
+        v_info = video_details.get(vid_id, {"views": 0, "seconds": 0})
+        views = v_info["views"]
+        duration_sec = v_info["seconds"]
+        subs = subs_map.get(chan_id, 0)
+
+        if duration_sec <= 60:
+            continue
+
+        pub_raw = item["snippet"]["publishedAt"]
+        pub_date = datetime.fromisoformat(
+            pub_raw.replace("Z", "+00:00")
+        ).strftime("%d %b %Y")
+
+        thumbnails = item["snippet"].get("thumbnails", {})
+        thumb_url = (
+            thumbnails.get("high", {}).get("url")
+            or thumbnails.get("medium", {}).get("url")
+            or thumbnails.get("default", {}).get("url", "")
+        )
+
+        if views > subs and subs > 0 and views >= min_views:
+            ratio_val = round(views / subs, 1)
+            outliers.append(
+                {
+                    "titulo": item["snippet"]["title"],
+                    "canal": item["snippet"]["channelTitle"],
+                    "fecha": pub_date,
+                    "thumbnail": thumb_url,
+                    "visitas_num": views,
+                    "suscriptores_num": subs,
+                    "ratio_num": ratio_val,
+                    "visitas": f"{views:,}",
+                    "suscriptores": f"{subs:,}",
+                    "ratio": f"{ratio_val}x",
+                    "url": f"https://www.youtube.com/watch?v={vid_id}",
+                }
+            )
+
+    outliers = sorted(outliers, key=lambda x: x["ratio_num"], reverse=True)
+
+    # Paso C: Guardar los resultados en Supabase para futuras consultas
+    if outliers:
         try:
-            youtube = build("youtube", "v3", developerKey=active_key)
-            published_after = (
-                datetime.now(timezone.utc) - timedelta(days=days_back)
-            ).isoformat()
+            save_search_to_cache(query, outliers)
+        except Exception as e:
+            st.warning(f"No se pudo guardar en el caché de Supabase: {e}")
 
-            def execute_with_retry(request, max_retries=3):
-                for attempt in range(max_retries):
-                    try:
-                        return request.execute()
-                    except HttpError as e:
-                        if (
-                            e.resp.status in [500, 502, 503, 504]
-                            and attempt < max_retries - 1
-                        ):
-                            time.sleep(1.5 * (attempt + 1))
-                        else:
-                            raise e
-
-            def chunk_list(data, size=50):
-                for i in range(0, len(data), size):
-                    yield data[i : i + size]
-
-            items = []
-            page_token = None
-            while len(items) < max_results:
-                remaining = max_results - len(items)
-                search_req = youtube.search().list(
-                    q=query,
-                    part="snippet",
-                    type="video",
-                    videoDuration="any",
-                    order=order,
-                    publishedAfter=published_after,
-                    maxResults=min(50, remaining),
-                    pageToken=page_token,
-                )
-                search_res = execute_with_retry(search_req)
-
-                page_items = search_res.get("items", [])
-                items.extend(page_items)
-
-                page_token = search_res.get("nextPageToken")
-                if not page_token or not page_items:
-                    break
-
-            if not items:
-                return []
-
-            video_ids = [item["id"]["videoId"] for item in items]
-            channel_ids = list(set(item["snippet"]["channelId"] for item in items))
-
-            video_details = {}
-            for id_batch in chunk_list(video_ids, 50):
-                v_req = youtube.videos().list(
-                    part="statistics,contentDetails", id=",".join(id_batch)
-                )
-                v_res = execute_with_retry(v_req)
-
-                for v_item in v_res.get("items", []):
-                    v_id = v_item["id"]
-                    v_views = int(v_item["statistics"].get("viewCount", 0))
-                    v_duration_raw = v_item.get("contentDetails", {}).get(
-                        "duration", "PT0S"
-                    )
-                    v_seconds = parse_duration_to_seconds(v_duration_raw)
-
-                    video_details[v_id] = {"views": v_views, "seconds": v_seconds}
-
-            subs_map = {}
-            for id_batch in chunk_list(channel_ids, 50):
-                c_req = youtube.channels().list(
-                    part="statistics", id=",".join(id_batch)
-                )
-                c_res = execute_with_retry(c_req)
-
-                subs_map.update(
-                    {
-                        c_item["id"]: int(
-                            c_item["statistics"].get("subscriberCount", 0)
-                        )
-                        for c_item in c_res.get("items", [])
-                    }
-                )
-
-            outliers = []
-            for item in items:
-                vid_id = item["id"]["videoId"]
-                chan_id = item["snippet"]["channelId"]
-
-                v_info = video_details.get(vid_id, {"views": 0, "seconds": 0})
-                views = v_info["views"]
-                duration_sec = v_info["seconds"]
-                subs = subs_map.get(chan_id, 0)
-
-                if duration_sec <= 60:
-                    continue
-
-                pub_raw = item["snippet"]["publishedAt"]
-                pub_date = datetime.fromisoformat(
-                    pub_raw.replace("Z", "+00:00")
-                ).strftime("%d %b %Y")
-
-                thumbnails = item["snippet"].get("thumbnails", {})
-                thumb_url = (
-                    thumbnails.get("high", {}).get("url")
-                    or thumbnails.get("medium", {}).get("url")
-                    or thumbnails.get("default", {}).get("url", "")
-                )
-
-                if views > subs and subs > 0 and views >= min_views:
-                    ratio_val = round(views / subs, 1)
-                    outliers.append(
-                        {
-                            "titulo": item["snippet"]["title"],
-                            "canal": item["snippet"]["channelTitle"],
-                            "fecha": pub_date,
-                            "thumbnail": thumb_url,
-                            "visitas_num": views,
-                            "suscriptores_num": subs,
-                            "ratio_num": ratio_val,
-                            "visitas": f"{views:,}",
-                            "suscriptores": f"{subs:,}",
-                            "ratio": f"{ratio_val}x",
-                            "url": f"https://www.youtube.com/watch?v={vid_id}",
-                        }
-                    )
-
-            outliers = sorted(outliers, key=lambda x: x["ratio_num"], reverse=True)
-            return outliers
-
-        except HttpError as e:
-            # Si el error es 403 (cuota excedida o deshabilitada), se prueba con la siguiente clave
-            if e.resp.status == 403:
-                last_exception = e
-                st.session_state["key_index"] = (current_key_idx + 1) % total_keys
-                continue
-            else:
-                raise e
-
-    if last_exception:
-        raise Exception("Se ha alcanzado el límite de cuota diaria en TODAS las API Keys configuradas.")
-    return []
+    return outliers
 
 
 def get_card_html(item, is_blurred=False):
@@ -533,19 +570,19 @@ def render_outliers_with_paywall(outliers):
         st.markdown(paywall_wrapper, unsafe_allow_html=True)
 
 
-# --- HEADER ---
+# --- 6. HEADER ---
 st.markdown(
     """
     <div class="app-header">
-        <div class="app-badge">⚡ YOUTUBE INTELLIGENCE</div>
-        <div class="app-title">Apex Outliers</div>
+        <div class="app-badge">⚡ BEST VIDEOS </div>
+        <div class="app-title">U Smart Search</div>
         <div class="app-subtitle">Localiza vídeos de alto rendimiento que superan exponencialmente la audiencia base de sus canales.</div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-# --- PANEL DE CONTROL ---
+# --- 7. PANEL DE CONTROL ---
 with st.container():
     col_q, col_s, col_t = st.columns([2.5, 1, 1])
 
@@ -605,11 +642,11 @@ time_mapping = {
     "Último año": 365,
 }
 
-# --- EJECUCIÓN DE BÚSQUEDA ---
+# --- 8. EJECUCIÓN DE BÚSQUEDA ---
 if btn_search:
-    if not ACTIVE_KEYS:
+    if not ACTIVE_API_KEYS:
         st.error(
-            "⚠️ No hay ninguna API Key configurada. Agrega tus claves en Secrets o introduce una en la barra lateral."
+            "⚠️ No hay API Keys disponibles. Introduce tu clave en la barra lateral o configura YOUTUBE_API_KEYS en Secrets."
         )
     elif not query:
         st.warning("⚠️ Introduce una palabra clave.")
@@ -618,7 +655,7 @@ if btn_search:
             try:
                 days_back = time_mapping[time_option]
                 outliers = fetch_youtube_outliers(
-                    ACTIVE_KEYS,
+                    tuple(ACTIVE_API_KEYS),
                     query,
                     sort_mapping[sort_option],
                     days_back,
@@ -636,7 +673,7 @@ if btn_search:
             except Exception as e:
                 st.error(f"Error en la consulta: {e}")
 
-# --- MOSTRAR RESULTADOS Y EXPORTACIÓN ---
+# --- 9. MOSTRAR RESULTADOS Y EXPORTACIÓN ---
 if "outliers_data" in st.session_state:
     outliers = st.session_state["outliers_data"]
 
