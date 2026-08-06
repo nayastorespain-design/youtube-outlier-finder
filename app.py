@@ -346,37 +346,58 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- BARRA LATERAL: ACCESO DE USUARIO ---
-# --- BARRA LATERAL: ACCESO DE USUARIO ---
+# --- BARRA LATERAL: ACCESO Y PROTECCIÓN DE DATOS ---
 st.sidebar.title("👤 Acceso de Usuario")
 
-# Mantener la sesión guardada durante la navegación
 if "user_email" not in st.session_state:
     st.session_state["user_email"] = ""
 
 if "user_plan" not in st.session_state:
     st.session_state["user_plan"] = "free"
 
-# Formulario de Acceso
 with st.sidebar.form("auth_form"):
     email_input = st.text_input(
         "Email de la cuenta",
         value=st.session_state["user_email"],
         placeholder="ejemplo@correo.com",
-        help="Introduce tu email para guardar tus preferencias o acceder a tu plan Pro.",
     )
+
+    # ⚖️ CASILLA DE CUMPLIMIENTO RGPD / PROTECCIÓN DE DATOS
+    aceptar_politica = st.checkbox(
+        "Acepto la Política de Privacidad y el tratamiento de mi email para la gestión de la cuenta."
+    )
+
     submit_auth = st.form_submit_button(
         "🚀 Iniciar sesión / Registrarse", use_container_width=True
     )
 
     if submit_auth:
-        if email_input and "@" in email_input:
+        if not email_input or "@" not in email_input:
+            st.error("Por favor, introduce un email válido.")
+        elif not aceptar_politica:
+            st.warning(
+                "⚠️ Debes aceptar la política de privacidad para continuar."
+            )
+        else:
             plan_detectado = get_or_create_user_profile(email_input)
             st.session_state["user_email"] = email_input.strip().lower()
             st.session_state["user_plan"] = plan_detectado
             st.rerun()
-        else:
-            st.error("Por favor, introduce un email válido.")
+
+USER_PLAN = st.session_state.get("user_plan", "free")
+USER_EMAIL = st.session_state.get("user_email", "")
+
+if USER_EMAIL:
+    if USER_PLAN == "pro":
+        st.sidebar.success(f"✨ ¡Sesión PRO activa!\n\n**{USER_EMAIL}**")
+    else:
+        st.sidebar.info(f"ℹ️ Plan Gratuito activo.\n\n**{USER_EMAIL}**")
+
+st.sidebar.markdown("---")
+# Enlace visible a pie de la barra lateral
+st.sidebar.caption(
+    "🔒 Tus datos se tratan conforme al RGPD solo para la gestión de tu acceso a uSmartSearch."
+)
 
 # Asignamos la variable global USER_PLAN desde el estado de sesión
 USER_PLAN = st.session_state.get("user_plan", "free")
