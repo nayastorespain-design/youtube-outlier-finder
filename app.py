@@ -377,6 +377,26 @@ st.sidebar.markdown(
 """
 )
 
+# --- BARRA LATERAL: ACCESO DE USUARIO ---
+st.sidebar.title("👤 Acceso de Usuario")
+
+user_email_input = st.sidebar.text_input(
+    "Tu Email de cuenta / suscripción",
+    placeholder="ejemplo@correo.com",
+    help="Introduce el correo con el que realizaste el pago para desbloquear el plan Pro."
+)
+
+# Consultar en Supabase si este email tiene plan 'pro' o 'free'
+USER_PLAN = get_user_plan_by_email(user_email_input)
+
+# Mensaje de confirmación según su estado
+if USER_PLAN == "pro":
+    st.sidebar.success("✨ ¡Cuenta PRO Activa! Acceso ilimitado.")
+elif user_email_input:
+    st.sidebar.info("ℹ️ Plan Gratuito activo (Vista previa limitada).")
+
+st.sidebar.markdown("---")
+
 def parse_duration_to_seconds(duration_str):
     match = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration_str)
     if not match:
