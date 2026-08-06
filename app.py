@@ -347,22 +347,51 @@ st.markdown(
 )
 
 # --- BARRA LATERAL: ACCESO DE USUARIO ---
+# --- BARRA LATERAL: ACCESO DE USUARIO ---
 st.sidebar.title("👤 Acceso de Usuario")
 
-user_email_input = st.sidebar.text_input(
-    "Tu Email de cuenta / suscripción",
-    placeholder="ejemplo@correo.com",
-    help="Introduce el correo con el que realizaste el pago para desbloquear el plan Pro."
-)
+# Mantener la sesión guardada durante la navegación
+if "user_email" not in st.session_state:
+    st.session_state["user_email"] = ""
 
-# Consultar en Supabase si este email tiene plan 'pro' o 'free'
-USER_PLAN = get_or_create_user_profile(user_email_input)
+if "user_plan" not in st.session_state:
+    st.session_state["user_plan"] = "free"
 
-# Mensaje de confirmación según su estado
-if USER_PLAN == "pro":
-    st.sidebar.success("✨ ¡Cuenta PRO Activa! Acceso ilimitado.")
-elif user_email_input:
-    st.sidebar.info("ℹ️ Plan Gratuito activo (Vista previa limitada).")
+# Formulario de Acceso
+with st.sidebar.form("auth_form"):
+    email_input = st.text_input(
+        "Email de la cuenta",
+        value=st.session_state["user_email"],
+        placeholder="ejemplo@correo.com",
+        help="Introduce tu email para guardar tus preferencias o acceder a tu plan Pro.",
+    )
+    submit_auth = st.form_submit_button(
+        "🚀 Iniciar sesión / Registrarse", use_container_width=True
+    )
+
+    if submit_auth:
+        if email_input and "@" in email_input:
+            plan_detectado = get_or_create_user_profile(email_input)
+            st.session_state["user_email"] = email_input.strip().lower()
+            st.session_state["user_plan"] = plan_detectado
+            st.rerun()
+        else:
+            st.error("Por favor, introduce un email válido.")
+
+# Asignamos la variable global USER_PLAN desde el estado de sesión
+USER_PLAN = st.session_state.get("user_plan", "free")
+USER_EMAIL = st.session_state.get("user_email", "")
+
+# Feedback en la barra lateral según la sesión del usuario
+if USER_EMAIL:
+    if USER_PLAN == "pro":
+        st.sidebar.success(
+            f"✨ ¡Sesión PRO activa!\n\n**{USER_EMAIL}** (Acceso ilimitado)"
+        )
+    else:
+        st.sidebar.info(
+            f"ℹ️ Sesión Gratuita activa.\n\n**{USER_EMAIL}** (Muestra limitada a 2 resultados)"
+        )
 
 st.sidebar.markdown("---")
 
