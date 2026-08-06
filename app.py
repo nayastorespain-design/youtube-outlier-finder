@@ -713,6 +713,7 @@ if btn_search:
                 st.error(f"Error en la consulta: {e}")
 
 # --- 9. MOSTRAR RESULTADOS Y EXPORTACIÓN ---
+# --- RENDERIZADO DE RESULTADOS (PAYWALL) ---
 if "outliers_data" in st.session_state:
     outliers = st.session_state["outliers_data"]
 
@@ -724,8 +725,9 @@ if "outliers_data" in st.session_state:
             st.markdown(f"### ⚡ {len(outliers)} Outliers detectados")
 
         with col_export:
-            free_outliers = outliers[:2]
-            df_export = pd.DataFrame(free_outliers)
+            # Si es PRO exporta todo; si es FREE solo la muestra gratuita (2 resultados)
+            export_data = outliers if USER_PLAN == "pro" else outliers[:2]
+            df_export = pd.DataFrame(export_data)
 
             column_mapping = {
                 "titulo": "Título",
@@ -753,13 +755,28 @@ if "outliers_data" in st.session_state:
                 .replace(" ", "_")
             )
 
+            label_btn = (
+                "📥 Exportar Todo a CSV"
+                if USER_PLAN == "pro"
+                else "📥 Exportar Muestra CSV"
+            )
             st.download_button(
-                label="📥 Exportar Muestra CSV",
+                label=label_btn,
                 data=csv_data,
-                file_name=f"outliers_preview_{clean_query}.csv",
+                file_name=f"outliers_{clean_query}.csv",
                 mime="text/csv",
                 use_container_width=True,
                 key="btn_download_csv",
             )
 
-        render_outliers_with_paywall(outliers)
+        # CONTROL DE ACCESO PRO VS FREE
+        if USER_PLAN == "pro":
+            # Si el usuario es PRO, muestra TODOS los resultados sin difuminar ni bloquear
+            for item in outliers:
+                st.markdown(
+                    get_card_html(item, is_blurred=False),
+                    unsafe_allow_html=True,
+                )
+        else:
+            # Si el usuario es FREE, aplica la vista con Paywall (muestra 2 y bloquea el resto)
+            render_outliers_with_paywall(outliers)
