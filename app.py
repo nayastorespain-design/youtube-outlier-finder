@@ -312,7 +312,7 @@ if custom_key.strip():
     st.sidebar.success("🔑 Usando tu API Key personalizada.")
 elif server_keys:
     ACTIVE_KEYS = server_keys
-    st.sidebar.info(f"🌐 Sistema listo con {len(server_keys)} API Key(s) en rotación.")
+    st.sidebar.info(f"🌐 Usando API Server limitada.")
 else:
     ACTIVE_KEYS = []
     st.sidebar.warning("⚠️ No hay API Keys configuradas.")
