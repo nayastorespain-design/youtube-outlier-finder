@@ -62,7 +62,7 @@ def get_or_create_user_profile(email: str) -> str:
         if res.data and len(res.data) > 0:
             return res.data[0].get("plan", "free")
         else:
-            # 2. Si no existe, insertarlo automáticamente como 'free'
+            # 2. Si no existe, insertarlo
             insert_res = (
                 supabase.table("profiles")
                 .insert({"email": email_clean, "plan": "free"})
@@ -70,7 +70,8 @@ def get_or_create_user_profile(email: str) -> str:
             )
             return "free"
     except Exception as e:
-        print(f"Error procesando el email en Supabase: {e}")
+        # Mostramos el error en la barra lateral para ver si RLS o un campo faltante lo frena
+        st.sidebar.error(f"Error registrando email: {e}")
         return "free"
 
 # --- CONFIGURACIÓN DE PAGO ---
