@@ -356,7 +356,7 @@ user_email_input = st.sidebar.text_input(
 )
 
 # Consultar en Supabase si este email tiene plan 'pro' o 'free'
-USER_PLAN = get_user_plan_by_email(user_email_input)
+USER_PLAN = get_or_create_user_profile(user_email_input)
 
 # Mensaje de confirmación según su estado
 if USER_PLAN == "pro":
