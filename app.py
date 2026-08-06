@@ -320,10 +320,10 @@ st.markdown(
 
 # --- 4. GESTIÓN DE BARRA LATERAL ---
 st.sidebar.title("⚙️ Configuración")
-user_api_keys_input = st.sidebar.text_area(
+user_api_keys_input = st.sidebar.text_input(
     "Tu API Key personal (Opcional)",
     type="password",
-    help="Puedes introducir varias claves separadas por comas o saltos de línea para rotar en caso de agotar la cuota.",
+    help="Puedes introducir una o varias claves separadas por comas.",
 )
 
 def parse_api_keys(input_val):
