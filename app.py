@@ -8,7 +8,7 @@ from googleapiclient.errors import HttpError
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="Apex Outliers | YouTube Intelligence",
+    page_title="U Smart Search",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
