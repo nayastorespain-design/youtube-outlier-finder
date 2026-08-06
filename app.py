@@ -44,25 +44,34 @@ def save_search_to_cache(query: str, results: list):
     ).execute()
 
 
-def get_user_plan_by_email(email: str) -> str:
-    """Devuelve 'free' o 'pro' según el email introducido en la barra lateral."""
+def get_or_create_user_profile(email: str) -> str:
+    """Busca el email en Supabase. Si no existe, lo registra automáticamente como 'free'."""
     if not email or not email.strip():
         return "free"
 
     email_clean = email.strip().lower()
     try:
+        # 1. Consultar si ya existe el usuario
         res = (
             supabase.table("profiles")
             .select("plan")
             .eq("email", email_clean)
             .execute()
         )
+
         if res.data and len(res.data) > 0:
             return res.data[0].get("plan", "free")
+        else:
+            # 2. Si no existe, insertarlo automáticamente como 'free'
+            insert_res = (
+                supabase.table("profiles")
+                .insert({"email": email_clean, "plan": "free"})
+                .execute()
+            )
+            return "free"
     except Exception as e:
-        print(f"Error consultando el plan: {e}")
-
-    return "free"
+        print(f"Error procesando el email en Supabase: {e}")
+        return "free"
 
 # --- CONFIGURACIÓN DE PAGO ---
 PAYMENT_URL = "https://tu-pagina-de-pago.com"  # Reemplazar con tu enlace de pago
