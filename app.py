@@ -23,8 +23,9 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- 3. CONFIGURACIÓN GENERAL Y CONSTANTES ---
 PAYMENT_URL = "https://tu-pagina-de-pago.com"  # Reemplazar con tu enlace de pago
+DEFAULT_FREE_DAILY_CREDITS = 3  # Créditos gratuitos que se otorgan al día
 
-# --- 4. FUNCIONES DE SUPABASE (CACHÉ Y PLANES) ---
+# --- 4. FUNCIONES DE SUPABASE (CACHÉ, PLANES Y CRÉDITOS) ---
 def get_cached_search(query: str):
     """Busca si los resultados de YouTube ya están guardados en Supabase."""
     query_clean = query.strip().lower()
@@ -47,34 +48,87 @@ def save_search_to_cache(query: str, results: list):
     ).execute()
 
 
-def get_or_create_user_profile(email: str) -> str:
-    """Busca el email en Supabase. Si no existe, lo guarda como 'free'."""
+def get_user_profile_and_reset_credits(email: str) -> dict:
+    """
+    Obtiene el perfil del usuario.
+    Si ha cambiado de día, reinicia sus créditos al cupo diario de cuentas FREE.
+    """
     if not email or not email.strip():
-        return "free"
+        return {"plan": "free", "credits": 0}
 
     email_clean = email.strip().lower()
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
     try:
-        # 1. Consultar el plan actual
         res = (
             supabase.table("profiles")
-            .select("plan")
+            .select("plan, credits, last_reset_date")
             .eq("email", email_clean)
             .execute()
         )
 
         if res.data and len(res.data) > 0:
-            return res.data[0].get("plan", "free")
+            user_data = res.data[0]
+            plan = user_data.get("plan", "free")
+            credits = user_data.get("credits", DEFAULT_FREE_DAILY_CREDITS)
+            last_reset = user_data.get("last_reset_date", "")
+
+            # Si es usuario FREE y el último reinicio no fue hoy -> Recargar créditos diarios
+            if plan == "free" and last_reset != today_str:
+                credits = DEFAULT_FREE_DAILY_CREDITS
+                supabase.table("profiles").update(
+                    {"credits": credits, "last_reset_date": today_str}
+                ).eq("email", email_clean).execute()
+
+            return {"plan": plan, "credits": credits}
         else:
-            # 2. Si es la primera vez que entra, registrar el email
-            supabase.table("profiles").insert(
-                {"email": email_clean, "plan": "free"}
-            ).execute()
-            st.sidebar.success(f"✅ ¡Bienvenido! Registrado: {email_clean}")
-            return "free"
+            # Si no existe, crear usuario nuevo con créditos iniciales
+            new_profile = {
+                "email": email_clean,
+                "plan": "free",
+                "credits": DEFAULT_FREE_DAILY_CREDITS,
+                "last_reset_date": today_str,
+            }
+            supabase.table("profiles").insert(new_profile).execute()
+            st.sidebar.success(f"✅ Registrado con {DEFAULT_FREE_DAILY_CREDITS} búsquedas diarias gratis.")
+            return {"plan": "free", "credits": DEFAULT_FREE_DAILY_CREDITS}
 
     except Exception as e:
-        st.sidebar.error(f"❌ Error Supabase: {e}")
-        return "free"
+        st.sidebar.error(f"❌ Error al consultar perfil en Supabase: {e}")
+        return {"plan": "free", "credits": 0}
+
+
+def consume_user_credit(email: str) -> bool:
+    """
+    Descuenta 1 crédito al usuario si es FREE.
+    Retorna True si pudo descontar (o si es PRO), False si no le quedan créditos.
+    """
+    if not email:
+        return False
+
+    profile = get_user_profile_and_reset_credits(email)
+    
+    # Usuarios PRO tienen créditos ilimitados
+    if profile["plan"] == "pro":
+        return True
+
+    current_credits = profile["credits"]
+    if current_credits <= 0:
+        return False
+
+    # Descontar 1 crédito
+    new_credits = current_credits - 1
+    try:
+        supabase.table("profiles").update(
+            {"credits": new_credits}
+        ).eq("email", email.strip().lower()).execute()
+        
+        # Actualizar el estado de la sesión local
+        st.session_state["user_credits"] = new_credits
+        return True
+    except Exception as e:
+        st.error(f"Error al descontar crédito: {e}")
+        return False
 
 
 # --- 5. ESTILOS CSS PREMIUM ---
@@ -354,6 +408,9 @@ if "user_email" not in st.session_state:
 if "user_plan" not in st.session_state:
     st.session_state["user_plan"] = "free"
 
+if "user_credits" not in st.session_state:
+    st.session_state["user_credits"] = DEFAULT_FREE_DAILY_CREDITS
+
 st.sidebar.title("👤 Acceso de Usuario")
 
 with st.sidebar.form("auth_form"):
@@ -363,9 +420,8 @@ with st.sidebar.form("auth_form"):
         placeholder="ejemplo@correo.com",
     )
 
-    # ⚖️ CASILLA DE CUMPLIMIENTO RGPD / PROTECCIÓN DE DATOS
     aceptar_politica = st.checkbox(
-        "Acepto la Política de Privacidad y el tratamiento de mi email para la gestión de la cuenta."
+        "Acepto la Política de Privacidad y el tratamiento de mi email."
     )
 
     submit_auth = st.form_submit_button(
@@ -376,27 +432,27 @@ with st.sidebar.form("auth_form"):
         if not email_input or "@" not in email_input:
             st.error("Por favor, introduce un email válido.")
         elif not aceptar_politica:
-            st.warning(
-                "⚠️ Debes aceptar la política de privacidad para continuar."
-            )
+            st.warning("⚠️ Debes aceptar la política de privacidad para continuar.")
         else:
-            plan_detectado = get_or_create_user_profile(email_input)
+            profile = get_user_profile_and_reset_credits(email_input)
             st.session_state["user_email"] = email_input.strip().lower()
-            st.session_state["user_plan"] = plan_detectado
+            st.session_state["user_plan"] = profile["plan"]
+            st.session_state["user_credits"] = profile["credits"]
             st.rerun()
 
 USER_PLAN = st.session_state.get("user_plan", "free")
 USER_EMAIL = st.session_state.get("user_email", "")
+USER_CREDITS = st.session_state.get("user_credits", 0)
 
 if USER_EMAIL:
     if USER_PLAN == "pro":
-        st.sidebar.success(f"✨ ¡Sesión PRO activa!\n\n**{USER_EMAIL}** (Acceso ilimitado)")
+        st.sidebar.success(f"✨ **Plan PRO Activo**\n\n📧 `{USER_EMAIL}`\n\n♾️ Búsquedas ilimitadas")
     else:
-        st.sidebar.info(f"ℹ️ Sesión Gratuita activa.\n\n**{USER_EMAIL}** (Muestra limitada a 2 resultados)")
+        st.sidebar.info(
+            f"ℹ️ **Plan Gratuito**\n\n📧 `{USER_EMAIL}`\n\n⚡ **Créditos disponibles hoy:** `{USER_CREDITS}` / {DEFAULT_FREE_DAILY_CREDITS}"
+        )
 
-st.sidebar.caption(
-    "🔒 Tus datos se tratan conforme al RGPD solo para la gestión de tu acceso a uSmartSearch."
-)
+st.sidebar.caption("🔒 Tus datos se tratan conforme al RGPD para la gestión de tu acceso.")
 st.sidebar.markdown("---")
 
 st.sidebar.title("⚙️ Configuración API")
@@ -418,7 +474,7 @@ def parse_api_keys(input_val):
 
 user_keys = parse_api_keys(user_api_keys_input)
 
-# Obtener claves desde secretos (soporta sección [youtube] o raíz)
+# Obtener claves desde secretos
 youtube_secrets = st.secrets.get("youtube", {})
 if isinstance(youtube_secrets, dict) and "YOUTUBE_API_KEYS" in youtube_secrets:
     server_keys_raw = youtube_secrets["YOUTUBE_API_KEYS"]
@@ -426,8 +482,6 @@ else:
     server_keys_raw = st.secrets.get("YOUTUBE_API_KEYS", [])
 
 server_keys = parse_api_keys(server_keys_raw)
-
-# Lista final priorizando las introducidas por el usuario
 ACTIVE_API_KEYS = user_keys if user_keys else server_keys
 
 st.sidebar.markdown(
@@ -538,9 +592,7 @@ def fetch_youtube_outliers(
         for v_item in v_res.get("items", []):
             v_id = v_item["id"]
             v_views = int(v_item["statistics"].get("viewCount", 0))
-            v_duration_raw = v_item.get("contentDetails", {}).get(
-                "duration", "PT0S"
-            )
+            v_duration_raw = v_item.get("contentDetails", {}).get("duration", "PT0S")
             v_seconds = parse_duration_to_seconds(v_duration_raw)
 
             video_details[v_id] = {"views": v_views, "seconds": v_seconds}
@@ -608,7 +660,6 @@ def fetch_youtube_outliers(
 
     outliers = sorted(outliers, key=lambda x: x["ratio_num"], reverse=True)
 
-    # Paso C: Guardar los resultados en Supabase para futuras consultas
     if outliers:
         try:
             save_search_to_cache(query, outliers)
@@ -723,36 +774,45 @@ time_mapping = {
     "Último año": 365,
 }
 
-# --- 10. EJECUCIÓN DE BÚSQUEDA ---
+# --- 10. EJECUCIÓN DE BÚSQUEDA Y CONTROL DE CRÉDITOS ---
 if btn_search:
-    if not ACTIVE_API_KEYS:
-        st.error(
-            "⚠️ No hay API Keys disponibles. Introduce tu clave en la barra lateral o configura YOUTUBE_API_KEYS en Secrets."
-        )
+    if not USER_EMAIL:
+        st.error("⚠️ Debes iniciar sesión con tu email en la barra lateral para realizar búsquedas.")
+    elif not ACTIVE_API_KEYS:
+        st.error("⚠️ No hay API Keys disponibles. Configura tu clave en la barra lateral o en Secrets.")
     elif not query:
         st.warning("⚠️ Introduce una palabra clave.")
     else:
-        with st.spinner("Analizando métricas del canal y vídeos..."):
-            try:
-                days_back = time_mapping[time_option]
-                outliers = fetch_youtube_outliers(
-                    tuple(ACTIVE_API_KEYS),
-                    query,
-                    sort_mapping[sort_option],
-                    days_back,
-                    max_results,
-                    min_views=min_views_input,
-                )
+        # Verificar y descontar créditos antes de llamar a la API
+        if not consume_user_credit(USER_EMAIL):
+            st.error("🚫 **Has alcanzado el límite de créditos diarios gratuitos.**")
+            st.info(f"💡 Puedes esperar a mañana o actualizar al **Plan PRO** para tener búsquedas ilimitadas.")
+            st.markdown(f"[👉 Obtener Acceso PRO Ilimitado]({PAYMENT_URL})")
+        else:
+            with st.spinner("Analizando métricas del canal y vídeos..."):
+                try:
+                    days_back = time_mapping[time_option]
+                    outliers = fetch_youtube_outliers(
+                        tuple(ACTIVE_API_KEYS),
+                        query,
+                        sort_mapping[sort_option],
+                        days_back,
+                        max_results,
+                        min_views=min_views_input,
+                    )
 
-                if outliers:
-                    st.session_state["outliers_data"] = outliers
-                    st.session_state["search_query"] = query
-                else:
-                    st.session_state.pop("outliers_data", None)
-                    st.info("No se encontraron outliers con los filtros actuales.")
+                    if outliers:
+                        st.session_state["outliers_data"] = outliers
+                        st.session_state["search_query"] = query
+                        st.toast(f"✅ Búsqueda completada. Créditos restantes: {st.session_state.get('user_credits', 'PRO')}")
+                    else:
+                        st.session_state.pop("outliers_data", None)
+                        st.info("No se encontraron outliers con los filtros actuales.")
 
-            except Exception as e:
-                st.error(f"Error en la consulta: {e}")
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"Error en la consulta: {e}")
 
 # --- 11. RENDERIZADO DE RESULTADOS Y EXPORTACIÓN ---
 if "outliers_data" in st.session_state:
@@ -766,7 +826,6 @@ if "outliers_data" in st.session_state:
             st.markdown(f"### ⚡ {len(outliers)} Outliers detectados")
 
         with col_export:
-            # Si es PRO exporta todo; si es FREE solo la muestra gratuita (2 resultados)
             export_data = outliers if USER_PLAN == "pro" else outliers[:2]
             df_export = pd.DataFrame(export_data)
 
@@ -810,14 +869,11 @@ if "outliers_data" in st.session_state:
                 key="btn_download_csv",
             )
 
-        # CONTROL DE ACCESO PRO VS FREE
         if USER_PLAN == "pro":
-            # Muestra TODOS los resultados sin difuminar
             for item in outliers:
                 st.markdown(
                     get_card_html(item, is_blurred=False),
                     unsafe_allow_html=True,
                 )
         else:
-            # Aplica la vista con Paywall (muestra los 2 primeros y bloquea/difumina el resto)
             render_outliers_with_paywall(outliers)
