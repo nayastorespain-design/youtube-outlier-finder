@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta, timezone
 import re
 import time
+from datetime import datetime, timedelta, timezone
+
 import pandas as pd
 import streamlit as st
 from googleapiclient.discovery import build
@@ -288,26 +289,39 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- GESTIÓN DE BARRA LATERAL Y API KEY ---
+# --- GESTIÓN DE BARRA LATERAL Y PARSEO DE API KEYS ---
 st.sidebar.title("⚙️ Configuración")
-user_api_key = st.sidebar.text_input(
-    "Tu YouTube API Key (Opcional)",
+user_api_keys_input = st.sidebar.text_area(
+    "Tu(s) YouTube API Key(s)",
     type="password",
-    help="Si la cuota general está llena o prefieres usar tu propia clave de Google Cloud Console, introdúcela aquí.",
+    help="Puedes introducir varias claves separadas por comas o saltos de línea para rotar en caso de agotar la cuota.",
 )
 
-# Determinamos qué clave usar: Prioridad a la del usuario
-server_api_key = st.secrets.get("YOUTUBE_API_KEY", "")
-ACTIVE_API_KEY = (
-    user_api_key.strip() if user_api_key.strip() else server_api_key
-)
+def parse_api_keys(input_str):
+    if not input_str:
+        return []
+    # Separa por comas, saltos de línea o espacios
+    keys = re.split(r"[\n,\s]+", input_str.strip())
+    return [k.strip() for k in keys if k.strip()]
 
-if user_api_key.strip():
-    st.sidebar.success("🔑 Usando tu API Key personalizada.")
-elif server_api_key:
-    st.sidebar.info("🌐 Usando API Key del Servidor.")
+user_keys = parse_api_keys(user_api_keys_input)
+
+# Obtener claves del servidor desde secretos (soporta string simple o lista separada por comas)
+server_keys_raw = st.secrets.get("YOUTUBE_API_KEYS", "")
+if isinstance(server_keys_raw, list):
+    server_keys = server_keys_raw
 else:
-    st.sidebar.warning("⚠️ No hay API Key configurada.")
+    server_keys = parse_api_keys(server_keys_raw)
+
+# Lista final priorizando las introducidas por el usuario
+ACTIVE_API_KEYS = user_keys if user_keys else server_keys
+
+if user_keys:
+    st.sidebar.success(f"🔑 Usando {len(user_keys)} API Key(s) personalizada(s).")
+elif server_keys:
+    st.sidebar.info(f"🌐 Usando {len(server_keys)} API Key(s) del Servidor.")
+else:
+    st.sidebar.warning("⚠️ No hay API Keys configuradas.")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(
@@ -330,26 +344,41 @@ def parse_duration_to_seconds(duration_str):
     return hours * 3600 + minutes * 60 + seconds
 
 
-# --- CONSULTA A LA API ---
+# --- CONSULTA A LA API CON ROTACIÓN DE CLAVES ---
 @st.cache_data(ttl=43200, show_spinner=False)
 def fetch_youtube_outliers(
-    api_key, query, order, days_back, max_results, min_views=1000
+    api_keys_tuple, query, order, days_back, max_results, min_views=1000
 ):
-    youtube = build("youtube", "v3", developerKey=api_key)
+    api_keys = list(api_keys_tuple)
+    if not api_keys:
+        raise ValueError("No se proporcionó ninguna API Key válida.")
+
+    key_index = 0
+    youtube = build("youtube", "v3", developerKey=api_keys[key_index])
 
     published_after = (
         datetime.now(timezone.utc) - timedelta(days=days_back)
     ).isoformat()
 
-    def execute_with_retry(request, max_retries=3):
+    def execute_with_retry(request_builder_fn, max_retries=3):
+        nonlocal key_index, youtube
         for attempt in range(max_retries):
             try:
+                # Construye la petición con el cliente activo de youtube
+                request = request_builder_fn(youtube)
                 return request.execute()
             except HttpError as e:
-                if (
-                    e.resp.status in [500, 502, 503, 504]
-                    and attempt < max_retries - 1
-                ):
+                # Error de cuota excedida (403 quotaExceeded)
+                if e.resp.status in [403, 429]:
+                    key_index += 1
+                    if key_index < len(api_keys):
+                        # Cambiar a la siguiente API Key
+                        youtube = build("youtube", "v3", developerKey=api_keys[key_index])
+                        time.sleep(0.5)
+                        continue
+                    else:
+                        raise Exception("Se ha agotado la cuota de todas las API Keys disponibles.")
+                elif e.resp.status in [500, 502, 503, 504] and attempt < max_retries - 1:
                     time.sleep(1.5 * (attempt + 1))
                 else:
                     raise e
@@ -362,17 +391,21 @@ def fetch_youtube_outliers(
     page_token = None
     while len(items) < max_results:
         remaining = max_results - len(items)
-        search_req = youtube.search().list(
-            q=query,
-            part="snippet",
-            type="video",
-            videoDuration="any",
-            order=order,
-            publishedAfter=published_after,
-            maxResults=min(50, remaining),
-            pageToken=page_token,
-        )
-        search_res = execute_with_retry(search_req)
+        
+        # Petición envolvente para permitir cambio dinámico de clave
+        def build_search_req(yt_client):
+            return yt_client.search().list(
+                q=query,
+                part="snippet",
+                type="video",
+                videoDuration="any",
+                order=order,
+                publishedAfter=published_after,
+                maxResults=min(50, remaining),
+                pageToken=page_token,
+            )
+
+        search_res = execute_with_retry(build_search_req)
 
         page_items = search_res.get("items", [])
         items.extend(page_items)
@@ -389,10 +422,12 @@ def fetch_youtube_outliers(
 
     video_details = {}
     for id_batch in chunk_list(video_ids, 50):
-        v_req = youtube.videos().list(
-            part="statistics,contentDetails", id=",".join(id_batch)
-        )
-        v_res = execute_with_retry(v_req)
+        batch_ids = ",".join(id_batch)
+        def build_video_req(yt_client):
+            return yt_client.videos().list(
+                part="statistics,contentDetails", id=batch_ids
+            )
+        v_res = execute_with_retry(build_video_req)
 
         for v_item in v_res.get("items", []):
             v_id = v_item["id"]
@@ -406,10 +441,12 @@ def fetch_youtube_outliers(
 
     subs_map = {}
     for id_batch in chunk_list(channel_ids, 50):
-        c_req = youtube.channels().list(
-            part="statistics", id=",".join(id_batch)
-        )
-        c_res = execute_with_retry(c_req)
+        batch_c_ids = ",".join(id_batch)
+        def build_channel_req(yt_client):
+            return yt_client.channels().list(
+                part="statistics", id=batch_c_ids
+            )
+        c_res = execute_with_retry(build_channel_req)
 
         subs_map.update(
             {
@@ -574,9 +611,9 @@ time_mapping = {
 
 # --- EJECUCIÓN DE BÚSQUEDA ---
 if btn_search:
-    if not ACTIVE_API_KEY:
+    if not ACTIVE_API_KEYS:
         st.error(
-            "⚠️ No hay API Key disponible. Introduce tu propia clave en la barra lateral o configura YOUTUBE_API_KEY en Secrets."
+            "⚠️ No hay API Keys disponibles. Introduce tu clave en la barra lateral o configura YOUTUBE_API_KEYS en Secrets."
         )
     elif not query:
         st.warning("⚠️ Introduce una palabra clave.")
@@ -584,8 +621,9 @@ if btn_search:
         with st.spinner("Analizando métricas del canal y vídeos..."):
             try:
                 days_back = time_mapping[time_option]
+                # Se pasa la lista de API Keys como tupla para garantizar la compatibilidad con el caché de Streamlit
                 outliers = fetch_youtube_outliers(
-                    ACTIVE_API_KEY,
+                    tuple(ACTIVE_API_KEYS),
                     query,
                     sort_mapping[sort_option],
                     days_back,
