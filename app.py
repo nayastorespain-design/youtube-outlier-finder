@@ -62,7 +62,7 @@ def get_user_profile_and_reset_credits(email: str) -> dict:
     try:
         res = (
             supabase.table("profiles")
-            .select("plan, credits, last_reset_date")
+            .select("plan, credits, last_reset")
             .eq("email", email_clean)
             .execute()
         )
@@ -71,13 +71,13 @@ def get_user_profile_and_reset_credits(email: str) -> dict:
             user_data = res.data[0]
             plan = user_data.get("plan", "free")
             credits = user_data.get("credits", DEFAULT_FREE_DAILY_CREDITS)
-            last_reset = user_data.get("last_reset_date", "")
+            last_reset = user_data.get("last_reset", "")
 
             # Si es usuario FREE y el último reinicio no fue hoy -> Recargar créditos diarios
             if plan == "free" and last_reset != today_str:
                 credits = DEFAULT_FREE_DAILY_CREDITS
                 supabase.table("profiles").update(
-                    {"credits": credits, "last_reset_date": today_str}
+                    {"credits": credits, "last_reset": today_str}
                 ).eq("email", email_clean).execute()
 
             return {"plan": plan, "credits": credits}
@@ -87,7 +87,7 @@ def get_user_profile_and_reset_credits(email: str) -> dict:
                 "email": email_clean,
                 "plan": "free",
                 "credits": DEFAULT_FREE_DAILY_CREDITS,
-                "last_reset_date": today_str,
+                "last_reset": today_str,
             }
             supabase.table("profiles").insert(new_profile).execute()
             st.sidebar.success(f"✅ Registrado con {DEFAULT_FREE_DAILY_CREDITS} búsquedas diarias gratis.")
