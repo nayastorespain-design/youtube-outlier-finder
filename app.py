@@ -7,7 +7,6 @@ import streamlit as st
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from supabase import Client, create_client
-from utils.credits import check_and_update_credits, consume_credit
 
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
