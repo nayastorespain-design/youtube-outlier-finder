@@ -504,8 +504,8 @@ def render_outliers_with_paywall(outliers):
 st.markdown(
     """
     <div class="app-header">
-        <div class="app-badge">⚡ YOUTUBE INTELLIGENCE</div>
-        <div class="app-title">Apex Outliers</div>
+        <div class="app-badge">⚡ BEST VIDEOS </div>
+        <div class="app-title">U Smart Search</div>
         <div class="app-subtitle">Localiza vídeos de alto rendimiento que superan exponencialmente la audiencia base de sus canales.</div>
     </div>
     """,
