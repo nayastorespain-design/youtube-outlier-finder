@@ -45,13 +45,13 @@ def save_search_to_cache(query: str, results: list):
 
 
 def get_or_create_user_profile(email: str) -> str:
-    """Busca el email en Supabase. Si no existe, lo registra automáticamente como 'free'."""
+    """Busca el email en Supabase. Si no existe, lo guarda como 'free'."""
     if not email or not email.strip():
         return "free"
 
     email_clean = email.strip().lower()
     try:
-        # 1. Consultar si ya existe el usuario
+        # 1. Consultar el plan actual
         res = (
             supabase.table("profiles")
             .select("plan")
@@ -62,16 +62,15 @@ def get_or_create_user_profile(email: str) -> str:
         if res.data and len(res.data) > 0:
             return res.data[0].get("plan", "free")
         else:
-            # 2. Si no existe, insertarlo
-            insert_res = (
-                supabase.table("profiles")
-                .insert({"email": email_clean, "plan": "free"})
-                .execute()
-            )
+            # 2. Si es la primera vez que entra, registrar el email
+            supabase.table("profiles").insert(
+                {"email": email_clean, "plan": "free"}
+            ).execute()
+            st.sidebar.success(f"✅ ¡Bienvenido! Registrado: {email_clean}")
             return "free"
+
     except Exception as e:
-        # Mostramos el error en la barra lateral para ver si RLS o un campo faltante lo frena
-        st.sidebar.error(f"Error registrando email: {e}")
+        st.sidebar.error(f"❌ Error Supabase: {e}")
         return "free"
 
 # --- CONFIGURACIÓN DE PAGO ---
