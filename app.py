@@ -22,7 +22,10 @@ SUPABASE_URL = st.secrets["supabase"]["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["supabase"]["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- 3. FUNCIONES DE SUPABASE (CACHÉ Y PLANES) ---
+# --- 3. CONFIGURACIÓN GENERAL Y CONSTANTES ---
+PAYMENT_URL = "https://tu-pagina-de-pago.com"  # Reemplazar con tu enlace de pago
+
+# --- 4. FUNCIONES DE SUPABASE (CACHÉ Y PLANES) ---
 def get_cached_search(query: str):
     """Busca si los resultados de YouTube ya están guardados en Supabase."""
     query_clean = query.strip().lower()
@@ -74,10 +77,8 @@ def get_or_create_user_profile(email: str) -> str:
         st.sidebar.error(f"❌ Error Supabase: {e}")
         return "free"
 
-# --- CONFIGURACIÓN DE PAGO ---
-PAYMENT_URL = "https://tu-pagina-de-pago.com"  # Reemplazar con tu enlace de pago
 
-# --- ESTILOS CSS PREMIUM ---
+# --- 5. ESTILOS CSS PREMIUM ---
 st.markdown(
     """
     <style>
@@ -347,14 +348,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- BARRA LATERAL: ACCESO Y PROTECCIÓN DE DATOS ---
-st.sidebar.title("👤 Acceso de Usuario")
-
+# --- 6. BARRA LATERAL: AUTENTICACIÓN Y CONFIGURACIÓN ---
 if "user_email" not in st.session_state:
     st.session_state["user_email"] = ""
 
 if "user_plan" not in st.session_state:
     st.session_state["user_plan"] = "free"
+
+st.sidebar.title("👤 Acceso de Usuario")
 
 with st.sidebar.form("auth_form"):
     email_input = st.text_input(
@@ -390,40 +391,22 @@ USER_EMAIL = st.session_state.get("user_email", "")
 
 if USER_EMAIL:
     if USER_PLAN == "pro":
-        st.sidebar.success(f"✨ ¡Sesión PRO activa!\n\n**{USER_EMAIL}**")
+        st.sidebar.success(f"✨ ¡Sesión PRO activa!\n\n**{USER_EMAIL}** (Acceso ilimitado)")
     else:
-        st.sidebar.info(f"ℹ️ Plan Gratuito activo.\n\n**{USER_EMAIL}**")
+        st.sidebar.info(f"ℹ️ Sesión Gratuita activa.\n\n**{USER_EMAIL}** (Muestra limitada a 2 resultados)")
 
-st.sidebar.markdown("---")
-# Enlace visible a pie de la barra lateral
 st.sidebar.caption(
     "🔒 Tus datos se tratan conforme al RGPD solo para la gestión de tu acceso a uSmartSearch."
 )
-
-# Asignamos la variable global USER_PLAN desde el estado de sesión
-USER_PLAN = st.session_state.get("user_plan", "free")
-USER_EMAIL = st.session_state.get("user_email", "")
-
-# Feedback en la barra lateral según la sesión del usuario
-if USER_EMAIL:
-    if USER_PLAN == "pro":
-        st.sidebar.success(
-            f"✨ ¡Sesión PRO activa!\n\n**{USER_EMAIL}** (Acceso ilimitado)"
-        )
-    else:
-        st.sidebar.info(
-            f"ℹ️ Sesión Gratuita activa.\n\n**{USER_EMAIL}** (Muestra limitada a 2 resultados)"
-        )
-
 st.sidebar.markdown("---")
 
-# --- 4. GESTIÓN DE BARRA LATERAL ---
-st.sidebar.title("⚙️ Configuración")
+st.sidebar.title("⚙️ Configuración API")
 user_api_keys_input = st.sidebar.text_input(
     "Tu API Key personal (Opcional)",
     type="password",
     help="Puedes introducir una o varias claves separadas por comas.",
 )
+
 
 def parse_api_keys(input_val):
     if not input_val:
@@ -432,6 +415,7 @@ def parse_api_keys(input_val):
         return [str(k).strip() for k in input_val if str(k).strip()]
     keys = re.split(r"[\n,\s]+", str(input_val).strip())
     return [k.strip() for k in keys if k.strip()]
+
 
 user_keys = parse_api_keys(user_api_keys_input)
 
@@ -447,7 +431,6 @@ server_keys = parse_api_keys(server_keys_raw)
 # Lista final priorizando las introducidas por el usuario
 ACTIVE_API_KEYS = user_keys if user_keys else server_keys
 
-st.sidebar.markdown("---")
 st.sidebar.markdown(
     """
 ### 💡 ¿Cómo obtener tu propia API Key?
@@ -457,6 +440,7 @@ st.sidebar.markdown(
 """
 )
 
+# --- 7. FUNCIONES DE API Y RENDERIZADO DE CARDS ---
 def parse_duration_to_seconds(duration_str):
     match = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration_str)
     if not match:
@@ -467,7 +451,6 @@ def parse_duration_to_seconds(duration_str):
     return hours * 3600 + minutes * 60 + seconds
 
 
-# --- 5. CONSULTA A YOUTUBE API CON CACHÉ DE SUPABASE Y ROTACIÓN DE CLAVES ---
 def fetch_youtube_outliers(
     api_keys_tuple, query, order, days_back, max_results, min_views=1000
 ):
@@ -517,7 +500,7 @@ def fetch_youtube_outliers(
     page_token = None
     while len(items) < max_results:
         remaining = max_results - len(items)
-        
+
         def build_search_req(yt_client):
             return yt_client.search().list(
                 q=query,
@@ -665,11 +648,11 @@ def render_outliers_with_paywall(outliers):
         locked_html_cards = "".join([get_card_html(item, is_blurred=True) for item in preview_locked])
 
         paywall_wrapper = f"""<div class="locked-container">{locked_html_cards}<div class="paywall-overlay"><div class="paywall-card"><div class="paywall-icon">🔒</div><div class="paywall-title">Desbloquea {locked_count} Outliers más</div><div class="paywall-desc">Estás viendo una vista previa gratuita. Suscríbete al plan Pro de Apex Intelligence para consultar la lista completa de vídeos viralizados y exportar todos los datos.</div><a href="{PAYMENT_URL}" target="_blank" class="btn-paywall">Obtener Acceso Ilimitado</a></div></div></div>"""
-        
+
         st.markdown(paywall_wrapper, unsafe_allow_html=True)
 
 
-# --- 6. HEADER ---
+# --- 8. HEADER PRINCIPAL ---
 st.markdown(
     """
     <div class="app-header">
@@ -681,7 +664,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- 7. PANEL DE CONTROL ---
+# --- 9. PANEL DE CONTROL DE BÚSQUEDA ---
 with st.container():
     col_q, col_s, col_t = st.columns([2.5, 1, 1])
 
@@ -741,7 +724,7 @@ time_mapping = {
     "Último año": 365,
 }
 
-# --- 8. EJECUCIÓN DE BÚSQUEDA ---
+# --- 10. EJECUCIÓN DE BÚSQUEDA ---
 if btn_search:
     if not ACTIVE_API_KEYS:
         st.error(
@@ -772,8 +755,7 @@ if btn_search:
             except Exception as e:
                 st.error(f"Error en la consulta: {e}")
 
-# --- 9. MOSTRAR RESULTADOS Y EXPORTACIÓN ---
-# --- RENDERIZADO DE RESULTADOS (PAYWALL) ---
+# --- 11. RENDERIZADO DE RESULTADOS Y EXPORTACIÓN ---
 if "outliers_data" in st.session_state:
     outliers = st.session_state["outliers_data"]
 
@@ -831,12 +813,12 @@ if "outliers_data" in st.session_state:
 
         # CONTROL DE ACCESO PRO VS FREE
         if USER_PLAN == "pro":
-            # Si el usuario es PRO, muestra TODOS los resultados sin difuminar ni bloquear
+            # Muestra TODOS los resultados sin difuminar
             for item in outliers:
                 st.markdown(
                     get_card_html(item, is_blurred=False),
                     unsafe_allow_html=True,
                 )
         else:
-            # Si el usuario es FREE, aplica la vista con Paywall (muestra 2 y bloquea el resto)
+            # Aplica la vista con Paywall (muestra los 2 primeros y bloquea/difumina el resto)
             render_outliers_with_paywall(outliers)
