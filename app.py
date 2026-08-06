@@ -25,24 +25,43 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 def get_cached_search(query: str):
     """Busca si los resultados de YouTube ya están guardados en Supabase."""
     query_clean = query.strip().lower()
-    res = supabase.table("search_cache").select("results_json").eq("query_text", query_clean).execute()
+    res = (
+        supabase.table("search_cache")
+        .select("results_json")
+        .eq("query_text", query_clean)
+        .execute()
+    )
     if res.data:
         return res.data[0]["results_json"]
     return None
 
+
 def save_search_to_cache(query: str, results: list):
     """Guarda los resultados de una nueva búsqueda de YouTube en Supabase."""
     query_clean = query.strip().lower()
-    supabase.table("search_cache").upsert({
-        "query_text": query_clean,
-        "results_json": results
-    }).execute()
+    supabase.table("search_cache").upsert(
+        {"query_text": query_clean, "results_json": results}
+    ).execute()
 
-def get_user_plan(user_id: str) -> str:
-    """Devuelve 'free' o 'pro' según el estado del usuario en la base de datos."""
-    res = supabase.table("profiles").select("plan").eq("id", user_id).execute()
-    if res.data:
-        return res.data[0]["plan"]
+
+def get_user_plan_by_email(email: str) -> str:
+    """Devuelve 'free' o 'pro' según el email introducido en la barra lateral."""
+    if not email or not email.strip():
+        return "free"
+
+    email_clean = email.strip().lower()
+    try:
+        res = (
+            supabase.table("profiles")
+            .select("plan")
+            .eq("email", email_clean)
+            .execute()
+        )
+        if res.data and len(res.data) > 0:
+            return res.data[0].get("plan", "free")
+    except Exception as e:
+        print(f"Error consultando el plan: {e}")
+
     return "free"
 
 # --- CONFIGURACIÓN DE PAGO ---
